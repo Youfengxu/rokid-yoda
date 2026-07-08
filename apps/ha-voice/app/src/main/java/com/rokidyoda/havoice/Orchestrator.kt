@@ -54,13 +54,13 @@ object Orchestrator {
     }
 
     /**
-     * The orchestrator returns JSON; different builds name the reply field differently, so
-     * try the common keys and fall back to the raw body.
+     * The orchestrator returns `{"result": "..."}` (verified against the live :8100/run on
+     * 2026-07-08). We check `result` first, then a few fallbacks in case the shape changes.
      */
     private fun extractReply(raw: String): String {
         return try {
             val json = JSONObject(raw)
-            for (key in listOf("reply", "result", "response", "answer", "output", "text", "message")) {
+            for (key in listOf("result", "reply", "response", "answer", "output", "text", "message")) {
                 if (json.has(key)) {
                     val v = json.get(key)
                     return if (v is JSONObject) v.optString("content", v.toString()) else v.toString()
