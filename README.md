@@ -58,6 +58,14 @@ community reverse-engineered docs; see [SDK-REFERENCE.md](docs/SDK-REFERENCE.md)
 See [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) for the verified API,
 Maven coordinates, and code samples.
 
+### Project: voice-control Home Assistant
+
+[`apps/ha-voice`](apps/ha-voice) is a **CXR-L phone app** that lets the glasses
+control Home Assistant by reusing an existing homelab **orchestrator** (`:8100/run`
+with an `ha_control` tool): push-to-talk on the phone → phone STT → orchestrator →
+reply drawn on the glasses HUD. Fully private (no public endpoint, no on-glasses
+install). Design + data flow in [docs/HA-VOICE.md](docs/HA-VOICE.md).
+
 ---
 
 ## Quickstart (on-glasses HUD app)
@@ -92,9 +100,11 @@ rokid-yoda/
 │   ├── DEVICE-SETUP.md       ← enable ADB, dev cable, install/launch, debugging
 │   └── APP-IDEAS.md          ← project ideas + what the community has already built
 ├── apps/
-│   └── hello-hud/            ← buildable on-glasses starter app (Kotlin + Gradle)
+│   ├── hello-hud/            ← buildable on-glasses starter app (Kotlin + Gradle)
+│   └── ha-voice/            ← PHONE app: voice-control Home Assistant via your orchestrator
 ├── vendor-sdk/
-│   └── CXRSSDKSamples/       ← Rokid's OFFICIAL on-glasses (CXR-S) sample project
+│   ├── CXRSSDKSamples/       ← Rokid's OFFICIAL on-glasses (CXR-S) sample project
+│   └── CXRLSample/          ← Rokid's OFFICIAL phone (CXR-L) sample project
 └── scripts/
     └── deploy.sh             ← build + install + launch helper
 ```
