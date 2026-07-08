@@ -35,23 +35,28 @@ high contrast (black background, bright text), large type, and minimal chrome.
 
 ## The three ways to build (pick one)
 
-Rokid's **CXR (Connected XR)** SDK suite defines three app models:
+Rokid's **CXR (Connected XR)** SDK suite defines three app models. Naming below is
+the **official** portal naming (verified while logged in — it differs from the
+community reverse-engineered docs; see [SDK-REFERENCE.md](docs/SDK-REFERENCE.md)):
 
-1. **On-glasses app (CXR-S)** — an APK that runs *on the glasses*. Draws the HUD,
-   uses the camera/mic/IMU, and talks to a phone companion over the CXR bridge.
-   → **Start here.** `apps/hello-hud` is this model. Simplest path to pixels.
+1. **On-glasses app — CXR-S / "bare-metal"** — an APK that runs *on the glasses*.
+   Draws the HUD; uses the camera/mic/IMU/buttons; can message a phone over the
+   CXR bridge. → **Start here.** `apps/hello-hud` is this model, and Rokid's own
+   sample is in [`vendor-sdk/CXRSSDKSamples`](vendor-sdk/CXRSSDKSamples). Simplest
+   path to pixels on the glasses.
 
-2. **Mobile companion app (CXR-M)** — an Android/iOS phone app that pairs with the
-   glasses, queries status, pushes files, and drives AI workflows. Most community
-   "AI assistant" apps are phone-side: the glasses capture a photo, the phone runs
-   the vision/LLM call, the answer comes back to the HUD.
+2. **Phone app — CXR-L** (public) — runs on the phone and works *through the Rokid
+   AI App* to authenticate, open a `CustomView`/`CustomApp` session, push content
+   to the HUD, and run photo/audio/custom commands + device control. Best for
+   "AI assistant / translator / cards" ideas where the phone does the heavy lifting
+   and no on-glasses install is needed.
 
-3. **Standalone app (CXR-L)** — replaces Rokid's built-in launcher/AI app entirely
-   by binding the `com.rokid.sprite.aiapp` AIDL service. Advanced; for full custom
-   experiences.
+3. **Phone app — CXR-M** (gated) — a deeper mobile toolkit (stable link, real-time
+   A/V, scene customization) that pairs with CXR-S. Not a public download — request
+   from `Glasses.BD@rokid.com`.
 
-See [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) for API details and Maven
-coordinates for all three.
+See [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) for the verified API,
+Maven coordinates, and code samples.
 
 ---
 
@@ -82,29 +87,35 @@ Full step-by-step, including cable and driver notes, is in
 rokid-yoda/
 ├── README.md                 ← you are here
 ├── docs/
-│   ├── RESEARCH.md           ← consolidated web research + source links
-│   ├── SDK-REFERENCE.md      ← CXR-S / CXR-M / CXR-L APIs, Maven coords, Caps format
+│   ├── RESEARCH.md           ← consolidated research + source links
+│   ├── SDK-REFERENCE.md      ← verified CXR-S/L/M APIs, Maven coords, Caps, buttons
 │   ├── DEVICE-SETUP.md       ← enable ADB, dev cable, install/launch, debugging
 │   └── APP-IDEAS.md          ← project ideas + what the community has already built
 ├── apps/
 │   └── hello-hud/            ← buildable on-glasses starter app (Kotlin + Gradle)
+├── vendor-sdk/
+│   └── CXRSSDKSamples/       ← Rokid's OFFICIAL on-glasses (CXR-S) sample project
 └── scripts/
     └── deploy.sh             ← build + install + launch helper
 ```
+
+> `vendor-sdk/` holds official Rokid materials pulled from the logged-in developer
+> portal on 2026-07-08 — kept for local reference, not for redistribution.
 
 ---
 
 ## Important caveats (read before you sink time in)
 
-- **Not an official SDK download from a single button.** Rokid's developer portal
-  (open.rokid.com / ar.rokid.com) gates the SDK + docs behind developer
-  registration. Much of the concrete API knowledge below comes from the
-  community-maintained, reverse-engineered
-  [buildwithfenna/rokid-docs](https://github.com/buildwithfenna/rokid-docs).
-  **Register on the portal** to get official, current SDK artifacts and to publish.
-- **Maven coordinates and versions drift** with firmware. Treat the numbers in
-  [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) as a starting point, verify
-  against the portal.
+- **The SDK + docs live behind a login** at [open.rokid.com](https://open.rokid.com)
+  (Development Tools → SDK). The on-glasses **CXR-S sample is a public download**
+  (already pulled into `vendor-sdk/`); **CXR-L** docs are login-gated; **CXR-M** is
+  request-only via `Glasses.BD@rokid.com`. The API in
+  [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) is verified against the official
+  sample. The community [buildwithfenna/rokid-docs](https://github.com/buildwithfenna/rokid-docs)
+  is still handy for YodaOS internals, but its SDK *naming* is off — trust the portal.
+- **Maven coordinates and versions drift** with firmware. The verified coordinate
+  (`com.rokid.cxr:cxr-service-bridge:1.0-20250519.061355-45`) is what Rokid's
+  current sample uses; re-check the portal over time.
 - **You need the physical dev cable.** The standard magnetic charging cable does
   not expose USB data / ADB.
 

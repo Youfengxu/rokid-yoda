@@ -51,15 +51,21 @@ Mobile Phone (Android 9+)          Rokid Glasses (YodaOS)
                               └───────────┘      └──────────────┘
 ```
 
-- **CXR-M** — mobile companion (Android/iOS). Pair, query status, transfer files,
-  drive AI workflows. `CxrApi` singleton entry point.
-- **CXR-S** — on-glasses bridge app. Runs on the glasses, exchanges `Caps`/bytes
-  with the phone. `CXRServiceBridge` entry point.
-- **CXR-L** — standalone on-glasses app that replaces the built-in launcher/AI app
-  by binding `com.rokid.sprite.aiapp` via AIDL (`ExternalAppClient` / `CXRLink`).
-
-Maven coordinates, class references, and code samples: see
-[SDK-REFERENCE.md](SDK-REFERENCE.md).
+> ⚠️ **Naming correction (verified on the official portal 2026-07-08).** The
+> reverse-engineered community docs mislabeled the tiers. The authoritative mapping:
+>
+> - **CXR-L** — *phone* app (Android/iOS, public v1.0.4). Works through the Rokid AI
+>   App: auth token, `CustomView`/`CustomApp` sessions, push to HUD, photo/audio/
+>   commands, device control.
+> - **CXR-M** — *phone* app (gated, request from `Glasses.BD@rokid.com`, v1.1.0).
+>   Deeper toolkit: stable link, real-time A/V, scene customization; pairs with CXR-S.
+> - **CXR-S / "bare-metal"** — *on-glasses* APK. Runs directly on the glasses;
+>   HUD, buttons, IMU, camera. Entry point `CXRServiceBridge` (+ `Caps`). Official
+>   sample downloaded to [`../vendor-sdk/CXRSSDKSamples`](../vendor-sdk/CXRSSDKSamples).
+>
+> The class names the community found (`CXRServiceBridge`, `Caps`,
+> `cxr-service-bridge`) are correct. Full verified API + Maven coords:
+> [SDK-REFERENCE.md](SDK-REFERENCE.md).
 
 ## Developer portal / official resources
 

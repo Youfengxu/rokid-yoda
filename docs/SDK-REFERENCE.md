@@ -1,126 +1,219 @@
-# CXR SDK reference
+# CXR SDK reference (authoritative)
 
-API-level notes for the three Rokid CXR SDK tiers. Coordinates and versions are
-from the community reverse-engineered docs and **drift with firmware** — confirm
-against the official portal (open.rokid.com) once you have developer access.
+Verified against the **official Rokid developer portal** (open.rokid.com, logged
+in) on 2026-07-08, and cross-checked against the official on-glasses sample project
+in [`../vendor-sdk/CXRSSDKSamples/`](../vendor-sdk/CXRSSDKSamples). Where the
+community reverse-engineered docs disagreed, the portal wins — see
+[the taxonomy note](#official-taxonomy-vs-community-naming).
 
-## Maven
+## The three official SDKs (YodaOS-Sprite)
 
-All artifacts publish to Rokid's Maven repo:
+| SDK | Runs on | Public? | Version | Purpose |
+|-----|---------|---------|---------|---------|
+| **CXR-L** | Phone (Android/iOS) | ✅ yes | 1.0.4 (2026-06-29) | Extend the **Rokid AI App**; push content to HUD, photo/audio/commands, device control |
+| **CXR-M** | Phone (Android) | ❌ email `Glasses.BD@rokid.com` | 1.1.0 (2026-04-01) | Deeper mobile toolkit: stable link, real-time A/V, scene customization; pairs with CXR-S |
+| **CXR-S / "Bare-metal"** | Glasses (APK) | ✅ sample download | sample 1.0.9 | Apps that run **directly on the glasses**: HUD, buttons, IMU, camera |
 
-```kotlin
-// settings.gradle.kts (dependencyResolutionManagement) or build.gradle repositories
-maven { url = uri("https://maven.rokid.com/repository/maven-public/") }
-```
+Portal SDK page: <https://open.rokid.com/sdk?lang=en> (Development Tools → SDK).
+There's a separate **YodaOS-Master** track on the same page for the tethered
+AR Lite / AR Studio pucks — not covered here.
 
-| SDK | Coordinate | Min SDK | Notes |
-|-----|-----------|---------|-------|
-| CXR-M (mobile) | `com.rokid.cxr:client-m:1.0.8` | 28 (Android 9) | phone companion |
-| CXR-S (on-glasses) | `com.rokid.cxr:cxr-service-bridge:1.0-SNAPSHOT` | 28 | bridge app |
-| CXR-L (standalone) | `com.rokid.cxr:client-l:0.0.1` | 28 (target 28) | binds aiapp AIDL |
+### Which one do I want?
 
-> `hello-hud` in this repo intentionally uses **no CXR dependency** — it's a pure
-> Android HUD app so it builds even before you have portal/Maven access. Add the
-> `cxr-service-bridge` dependency when you want phone↔glasses messaging.
+- **Content on the HUD driven by phone logic (AI assistant, translator, cards)**
+  → **CXR-L**. You write a phone app; it talks through the Rokid AI App to render
+  `CustomView`s on the glasses and run photo/audio/commands. No on-glasses install.
+- **A real app installed and running on the glasses (games, timers, sensor apps,
+  camera apps)** → **CXR-S / bare-metal**. This is what [`apps/hello-hud`](../apps/hello-hud)
+  targets and what the downloaded sample demonstrates.
+- **Deep, low-level phone↔glasses (custom pairing, live A/V pipelines)** → **CXR-M**
+  (contact Rokid BD).
 
 ---
 
-## CXR-S — on-glasses bridge app
+## CXR-S / bare-metal (on-glasses) — the verified API
 
-Entry point: **`CXRServiceBridge`**. Runs inside your APK on the glasses and
-exchanges messages with the phone's CXR-M app.
+> Bare-metal dev is "largely the same as Android app development" (official docs).
+> YodaOS-Sprite is based on **Android Go** — respect Go memory constraints.
 
-### Sending messages
-
-`sendMessage(String name, Caps args)` → returns `0` success, `-1` param error,
-`-3` internal error. The `name` is a channel string that must be **agreed with the
-mobile end**.
+### Gradle setup (from the official sample)
 
 ```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.rokid.com/repository/maven-public/") }
+        google()
+        mavenCentral()
+    }
+}
+```
+
+```kotlin
+// app/build.gradle.kts
+android {
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 31        // glasses are Android 12; sample uses 31
+        targetSdk = 36
+    }
+}
+dependencies {
+    implementation("com.rokid.cxr:cxr-service-bridge:1.0-20250519.061355-45")
+    // + CameraX 1.3.1 for photo/video capture
+}
+```
+
+Toolchain the sample pins: Gradle **8.13**, AGP **8.13.1**, Kotlin **2.0.21**,
+Jetpack Compose (BOM 2024.09.00), Java 11.
+
+### Messaging: `CXRServiceBridge` + `Caps`  (package `com.rokid.cxr`)
+
+The glasses app talks to a paired phone via `CXRServiceBridge`. Verbatim pattern
+from the sample's `selfCMD` demo:
+
+```kotlin
+import com.rokid.cxr.CXRServiceBridge
+import com.rokid.cxr.Caps
+
 val bridge = CXRServiceBridge()
 
-// structured message
-val args = Caps()
-args.write("send_message")
-args.writeUInt32(5)
-val rc = bridge.sendMessage("message_channel", args)
+// 1. Connection state
+bridge.setStatusListener(object : CXRServiceBridge.StatusListener {
+    override fun onConnected(addr: String?, type: Int) {}
+    override fun onDisconnected() {}
+    override fun onARTCStatus(quality: Float, ok: Boolean) {}   // data-channel health
+})
 
-// message + binary payload (e.g. an image)
-val data: ByteArray = /* ... */ byteArrayOf()
-bridge.sendMessage("photo_channel", args, data, 0, data.size)
+// 2. Subscribe to inbound messages on a channel key you define
+bridge.subscribe("rk_custom_client", object : CXRServiceBridge.MsgCallback {
+    override fun onReceive(name: String?, args: Caps?, bytes: ByteArray?) {
+        // args is a Caps; iterate with caps.size() / caps.at(i)
+    }
+})
+
+// 3. Send a structured message. Returns 0 = success, -1 = failure.
+val cap = Caps().apply {
+    write("key")        // string field
+    writeInt32(42)      // int field
+}
+val rc = bridge.sendMessage("rk_custom_key", cap)
 ```
 
-### Receiving messages / connection state
+Notes:
+- Channel `name`s are **contracts you agree on with the phone side** — the send key
+  (`rk_custom_key`) and subscribe key (`rk_custom_client`) are app-defined strings.
+- `sendMessage(name, caps)` returns `Int`: `0` success, `-1` failure.
 
-Register listeners (interfaces documented in the community reference):
+### `Caps` serialization
 
-- `ConnectionListener` — Android/iOS device connect/disconnect.
-- `ARTCHealthListener` — Bluetooth data-channel health.
-- `MessageListener` — inbound structured commands from the phone.
-
-Pattern: mobile sends a `Caps` command → `CXRService` routes it → your
-`MessageListener` fires → you process and reply via `bridge.sendMessage(...)`.
-
----
-
-## CXR-M — mobile companion app
-
-Entry point: **`CxrApi`** singleton (callback/listener architecture). Internally:
-
-- `CxrController` — request routing / id management
-- `BluetoothController` — BLE GATT + classic socket (SCO for audio)
-- `WifiController` — Wi-Fi P2P discovery
-- `FileController` — HTTP file sync (port 8848), APK upload
-
-Capabilities: device discovery + pairing/reconnection, battery/network/device
-status queries, file transfer, audio recording, photo capture, and bidirectional
-`Caps` messaging with the glasses. Custom AI-workflow integration hooks let the
-phone drive on-glasses AI flows.
-
-Connection handshake (roughly): BLE GATT scan → filter by Rokid UUID → GATT
-connect → BT pair → classic socket → MTU/handshake (`cxr-service.json`) → optional
-Wi-Fi P2P for bulk file sync.
-
----
-
-## CXR-L — standalone app
-
-Extends **`ExternalAppClient`** (Android AIDL bound service); binds the
-`com.rokid.sprite.aiapp` service (`IMediaStreamService`) to take over media
-streaming and AI-app lifecycle — i.e. **replace** the stock launcher/AI app.
+Positional binary format. Write in order, read by index.
 
 ```kotlin
-class CXRLink(context: Context) : ExternalAppClient(context)
+// write
+val c = Caps().apply { write("hello"); writeInt32(7) }
+// read
+c.size()                    // field count
+val v = c.at(0)             // Caps.Value
+v.type()                    // Caps.Value.TYPE_STRING, TYPE_INT32, ...
+v.string; v.int; v.long; v.float; v.double; v.`object`; v.binary
 ```
 
-Use when you want a fully custom experience rather than a companion to the stock
-apps. More involved; needs the app to be provisioned as the AI app.
+Value types seen: `TYPE_STRING, TYPE_INT32, TYPE_UINT32, TYPE_INT64, TYPE_UINT64,
+TYPE_FLOAT, TYPE_DOUBLE, TYPE_OBJECT` (nested Caps), `TYPE_BINARY` (`.binary.data`,
+`.binary.length`).
+
+### Hardware buttons & touchpad — ordered broadcasts
+
+Not in the community docs. YodaOS broadcasts input events as **ordered
+broadcasts**; register a `BroadcastReceiver` with high priority and call
+`abortBroadcast()` to consume an event (prevent system default). From the sample's
+`keys` demo:
+
+```kotlin
+enum class KeyType(val action: String) {
+    CLICK("com.android.action.ACTION_SPRITE_BUTTON_CLICK"),
+    BUTTON_DOWN("com.android.action.ACTION_SPRITE_BUTTON_DOWN"),
+    BUTTON_UP("com.android.action.ACTION_SPRITE_BUTTON_UP"),
+    DOUBLE_CLICK("com.android.action.ACTION_SPRITE_BUTTON_DOUBLE_CLICK"), // = Back
+    AI_START("com.android.action.ACTION_AI_START"),                      // touchpad long-press
+    LONG_PRESS("com.android.action.ACTION_SPRITE_BUTTON_LONG_PRESS"),
+    TWO_FINGER_SINGLE_TAP("com.android.action.ACTION_TWO_FINGER_SINGLE_TAP"),
+    TWO_FINGER_DOUBLE_TAP("com.android.action.ACTION_TWO_FINGER_DOUBLE_TAP"),
+    TWO_FINGER_SWIPE_FORWARD("com.android.action.ACTION_TWO_FINGER_SWIPE_FORWARD"),
+    TWO_FINGER_SWIPE_BACK("com.android.action.ACTION_TWO_FINGER_SWIPE_BACK"),
+    SETTINGS_KEY("com.android.action.ACTION_SETTINGS_KEY"),
+}
+
+registerReceiver(keyReceiver, IntentFilter().apply {
+    KeyType.values().forEach { addAction(it.action) }
+    priority = 100
+})
+// in onReceive: handle, then abortBroadcast() to swallow it
+```
+
+Fixed system gestures you **cannot** override (defined by YodaOS-Sprite):
+long-press right-temple touchpad = enter Rokid AI app; double-tap button = Back;
+tap top button = photo; long-press top button = record video; wake words trigger
+features.
+
+### Other capabilities in the sample
+
+- **Camera / video**: CameraX 1.3.1 (`camera-core/camera2/lifecycle/video/view`).
+- **Audio capture**: `RECORD_AUDIO`; sample defines an audio channel `0x6000FC`.
+- **BLE GATT server** on the glasses: `BLUETOOTH_CONNECT` + `BLUETOOTH_ADVERTISE`
+  (Android 12 runtime perms).
 
 ---
 
-## `Caps` serialization format
+## CXR-L (phone) — official summary
 
-Rokid's binary wire format, shared across all three SDKs. Supported types:
+Runs on the **phone**; works with Rokid Glasses **through the Rokid AI App**
+(a.k.a. "Hi Rokid"). Handles auth, session, and pushing experiences to the HUD.
 
-- Primitives: `boolean`, `int32`, `int64`, `float`, `double`
-- `string` (UTF-8), `byte[]` blobs
-- Nested `Caps` objects (recursive), lists/maps
+Typical flow (from the official CXR-L docs):
+1. Integrate the SDK; guide the user to install/launch the Rokid AI App.
+2. Obtain a **token** via authorization.
+3. Establish a **`CustomView`** or **`CustomApp`** session; keep the link alive.
+4. Complete **scene building** on the glasses (glasses reach working state).
+5. Use **photo capture, audio, custom commands** once the scene is ready.
+6. Use **device control** (brightness / volume) when linked.
 
-Written positionally — reader and writer must agree on field order and the channel
-`name`. Transported over BT classic socket (negotiated port), Wi-Fi Direct HTTP
-(8848), and BT SCO for audio.
+Docs (login-gated, SPA): CXR-L → *Documentation* button on the SDK page.
+Left-nav: Introduction · Quick Start · Development Flow & State-Machine · Terms ·
+Feature Development · Version History.
 
-Common write/read calls seen in samples: `write(String)`, `writeUInt32(int)`,
-`writeInt32/64`, `writeFloat/Double`, `writeBinary(byte[])`, with mirrored
-`read*()` on the receiving side.
+## CXR-M (phone) — gated
+
+"A mobile development toolkit for building Android apps that work with Rokid
+Glasses — stable connections, data communication, real-time audio/video, and scene
+customization; can be used with the on-device CXR-S SDK." **Not publicly
+available**; request from **`Glasses.BD@rokid.com`**. Latest 1.1.0 (2026-04-01).
 
 ---
 
-## Which model do I pick?
+## Official taxonomy vs community naming
 
-| You want to… | Use |
-|--------------|-----|
-| Put text/graphics on the HUD, use camera/mic/IMU on-device | **CXR-S** (on-glasses APK) — start with `apps/hello-hud` |
-| Run heavy AI/LLM/vision on the phone, glasses as I/O | **CXR-M** (phone) + a thin CXR-S app |
-| Build a voice/AI "agent" with skills | **AIUI Studio** on the portal |
-| Replace the whole stock experience | **CXR-L** (standalone) |
+The reverse-engineered [buildwithfenna/rokid-docs](https://github.com/buildwithfenna/rokid-docs)
+labeled the tiers differently. Trust the portal:
+
+| Concept | Official portal | Community docs called it |
+|---------|-----------------|--------------------------|
+| Phone app via Rokid AI App | **CXR-L** (public) | "CXR-L standalone" (approx.) |
+| Deeper phone toolkit | **CXR-M** (gated) | "CXR-M mobile companion" |
+| On-glasses app | **CXR-S / bare-metal** | "CXR-S bridge" |
+
+The class names the community found (`CXRServiceBridge`, `Caps`, the
+`cxr-service-bridge` artifact) **are correct** — confirmed by the official sample.
+
+## Source URLs
+
+- SDK landing (login): <https://open.rokid.com/sdk?lang=en>
+- On-glasses/bare-metal docs: `custom.rokid.com/.../pc/us/2f8aac88fc6747448a353e2327bc7c30.html`
+- CXR-L docs: `custom.rokid.com/.../pc/us/663f26766e7348059905815bc022e1f7.html`
+- CXR-S sample zip: <https://rokid-ota.oss-cn-hangzhou.aliyuncs.com/toB/Document/CXR/1.0.9/CXRSSDKSamples.zip>
+- Design guidelines: <https://t.rokid.com/0w0opp8x> (redirects to a CN SPA)
+- Maven: `https://maven.rokid.com/repository/maven-public/`
+- Android Go constraints: <https://developer.android.com/guide/topics/androidgo>

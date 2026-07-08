@@ -11,3 +11,6 @@ captures/
 
 # Keep the Gradle wrapper jar tracked (needed to build):
 !gradle/wrapper/gradle-wrapper.jar
+
+# Vendor SDK: keep the extracted sample source, ignore the large zip
+vendor-sdk/*.zip

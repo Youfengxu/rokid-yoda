@@ -77,7 +77,9 @@ adb exec-out screencap -p > hud.png                             # screenshot the
 ## Common gotchas
 
 - **"adb: no devices"** → wrong cable, or ADB not enabled in the Rokid AI app.
-- **Install fails on minSdk** → glasses are API 32; keep `minSdk` ≤ 32 (we use 28).
+- **Install fails on minSdk** → glasses are Android 12 (API 31/32). Rokid's official
+  sample uses `minSdk 31`; `hello-hud` matches. YodaOS-Sprite is **Android Go** —
+  keep the app lean (memory-constrained).
 - **App installs but nothing on HUD** → confirm the `am start` component name and
   that the activity theme is fullscreen/no-title (see `hello-hud`'s theme).
 - **CXR Maven 401/404** → those artifacts may require portal access; `hello-hud`

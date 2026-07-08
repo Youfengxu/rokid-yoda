@@ -27,13 +27,13 @@ First build needs `local.properties` with `sdk.dir=...` (see
   `app/build.gradle.kts` and follow [../../docs/SDK-REFERENCE.md](../../docs/SDK-REFERENCE.md).
 - Use the camera/IMU: standard Android Camera2 / SensorManager APIs.
 
-## Note on the Gradle wrapper
+## What this demonstrates
 
-If `gradlew` / `gradle/wrapper/gradle-wrapper.jar` is missing, generate it once
-with a system Gradle:
+- A fullscreen HUD `TextView` sized for the 480×640 green-mono display.
+- Hardware input: `RokidKeyReceiver` (in `HardwareKeys.kt`) listens for the temple
+  button and touchpad gestures via YodaOS ordered broadcasts and shows the latest
+  key on the HUD. Action strings come from Rokid's official CXR-S sample.
 
-```bash
-gradle wrapper --gradle-version 8.9
-```
-
-or open the project in Android Studio, which will create it for you.
+The Gradle wrapper (`gradlew` + `gradle/wrapper/gradle-wrapper.jar`, Gradle 8.13) is
+included, so `./gradlew assembleDebug` works out of the box once `local.properties`
+points at your Android SDK.

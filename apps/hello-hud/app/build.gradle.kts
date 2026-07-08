@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.rokidyoda.hellohud"
-        minSdk = 28          // CXR SDKs require >= 28; glasses are 32
-        targetSdk = 32
+        minSdk = 31          // matches Rokid's official CXR-S sample; glasses are Android 12
+        targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -39,7 +39,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
-    // --- Rokid glasses <-> phone bridge (uncomment once you have portal access) ---
-    // implementation("com.rokid.cxr:cxr-service-bridge:1.0-SNAPSHOT")
-    // See ../../docs/SDK-REFERENCE.md for the CXRServiceBridge API.
+    // --- Rokid on-glasses (CXR-S) bridge: phone <-> glasses messaging ---
+    // Verified coordinate from Rokid's official sample (needs the maven.rokid.com repo
+    // in settings.gradle.kts). Uncomment to use CXRServiceBridge / Caps.
+    // implementation("com.rokid.cxr:cxr-service-bridge:1.0-20250519.061355-45")
+    // See ../../docs/SDK-REFERENCE.md and ../../vendor-sdk/CXRSSDKSamples for usage.
 }
