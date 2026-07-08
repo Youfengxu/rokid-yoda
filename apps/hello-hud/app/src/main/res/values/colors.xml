@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The panel is green monochrome; pure black reads as "off", bright green as "on". -->
+    <color name="hud_background">#FF000000</color>
+    <color name="hud_foreground">#FF00FF66</color>
+</resources>
