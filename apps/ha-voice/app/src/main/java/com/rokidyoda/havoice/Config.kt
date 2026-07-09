@@ -18,23 +18,37 @@ object Config {
 
     const val REQUEST_CODE_AUTH = 1001
 
-    /** Where push-to-talk audio comes from. */
+    // ---- CustomApp: the on-glasses companion (apps/havoice-glass) ----
+    /** Must match havoice-glass applicationId. The phone installs + starts this on the glasses. */
+    const val GLASS_PACKAGE = "com.rokidyoda.havoiceglass"
+    const val GLASS_ENTRY = "com.rokidyoda.havoiceglass.MainActivity"
+    /** Built havoice-glass APK, shipped in this app's assets. See README for how to place it. */
+    const val GLASS_APK_ASSET = "glass.apk"
+
+    // ---- Custom-command protocol (must match havoice-glass Protocol.kt) ----
+    const val GLASS_TO_PHONE_KEY = "hv_glass"
+    const val PHONE_TO_GLASS_KEY = "hv_phone"
+    const val EVENT_PTT_START = "ptt_start"
+    const val CMD_STATUS = "status"
+    const val CMD_REPLY = "reply"
+
+    // ---- Voice capture ----
     enum class MicSource { PHONE, GLASSES }
 
-    /**
-     * PHONE  = phone mic via SpeechRecognizer (works out of the box).
-     * GLASSES = glasses mic via CXR-L PCM stream + on-device Vosk STT (talk with phone
-     *           pocketed). Requires the Vosk model in assets — see [VOSK_MODEL_ASSET].
-     */
+    /** GLASSES = glasses mic via CXR-L PCM + on-device Vosk STT. PHONE = phone mic. */
     val MIC_SOURCE = MicSource.GLASSES
 
-    /**
-     * Folder name under app/src/main/assets/ holding an unpacked Vosk model
-     * (e.g. vosk-model-small-en-us-0.15 renamed to this). Gitignored — download it
-     * yourself; see apps/ha-voice/README.md. Glasses PCM is 16 kHz mono 16-bit.
-     */
+    /** Vosk model folder under assets/ (gitignored — download it; see README). */
     const val VOSK_MODEL_ASSET = "vosk-model-en"
 
-    /** Read the reply aloud. Plays through the glasses when they're the active BT audio device. */
+    /** Read the reply aloud (through the glasses when they're the active BT audio device). */
     const val TTS_ENABLED = true
+
+    // ---- Silence / endpointing for glasses-mic capture (tap-to-talk, auto-stop) ----
+    /** Finalize after this much silence once we have some transcript. */
+    const val SILENCE_MS = 1500L
+    /** Cancel if no speech at all within this window. */
+    const val NO_SPEECH_MS = 6000L
+    /** Hard cap on a single utterance. */
+    const val MAX_UTTERANCE_MS = 12000L
 }

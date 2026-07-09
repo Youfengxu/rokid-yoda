@@ -1,55 +1,65 @@
 # Rokid → Home Assistant voice control
 
 Control Home Assistant from the Rokid glasses by **reusing your existing
-orchestrator** (`:8100/run` with the `ha_control` tool). Chosen approach:
-**private phone bridge, push‑to‑talk** — the phone is mic + brain + network, the
-glasses are the display.
+orchestrator** (`:8100/run` with the `ha_control` tool). Trigger: a **two‑finger tap
+on the glasses touchpad**; capture **auto‑stops on silence**. Fully private — no
+public endpoint, no self‑hosted STT.
 
-## Architecture
+## Architecture (two apps, CustomApp mode)
 
 ```
- ┌──────────── Rokid Glasses (YodaOS) ────────────┐
- │  HUD CustomView (black bg / green text)         │◄─ reply rendered here
- └───────────────────▲─────────────────────────────┘
-        BLE link      │ CXR-L CustomView (customViewUpdate)
- ┌────────────────────┴────────────────────────────┐
- │  Phone: HA-Voice app (CXR-L, this repo)          │
- │   1. Auth via Rokid AI app → token               │
- │   2. Open CustomView session on glasses          │
- │   3. Push-to-talk → phone SpeechRecognizer → text│
- │   4. POST text ──────────────────────────────────┼──┐
- │   6. Render reply on HUD ◄───────────────────────┼──┤ (over phone's tailnet/LAN)
- └──────────────────────────────────────────────────┘  │
-                                                        ▼
+ ┌──────────────── Rokid Glasses (YodaOS) ─────────────────┐
+ │  havoice-glass (CXR-S app, apps/havoice-glass)          │
+ │   • renders HUD (black / green)                         │
+ │   • two-finger tap → sendMessage("ptt_start") ──────────┼─┐
+ │   • shows status/reply from phone  ◄────────────────────┼─┼─┐
+ └─────────────────────────▲───────────────────────────────┘ │ │
+              CXR link (BLE, via Rokid AI app)                │ │ custom commands
+ ┌─────────────────────────┴───────────────────────────────┐ │ │
+ │  ha-voice (CXR-L phone app, apps/ha-voice)               │ │ │
+ │   1. Auth → token; CustomApp session; install+start glass│◄┘ │
+ │   2. on "ptt_start": stream glasses mic → Vosk STT ───────────┘
+ │   3. POST text ──────────────────────────────────────────┼──┐
+ │   4. reply → sendReply() to glass HUD + phone TTS         │  │
+ └───────────────────────────────────────────────────────────┘  │ (phone tailnet/LAN)
+                                                                 ▼
         orchestrator :8100/run  (k11-services 192.168.100.21)
            │  {"task": "...", "history": [...]}
            ├── Tool RAG selects ha_control
            └── ha_control ──► Home Assistant :8123 ──► reply text
 ```
 
-Nothing new is exposed publicly; no self‑hosted STT is added (the phone's OS STT
-is used); the entire orchestrator + `ha_control` stack is reused unchanged.
+## Why CustomApp (not CustomView)
 
-## Why this shape
+To trigger from a **temple/touchpad gesture**, the glasses must send an event to the
+phone. Per the CXR‑L capability matrix (see [SDK-REFERENCE.md](SDK-REFERENCE.md)):
 
-From the **CXR‑L capability matrix** (verified on the portal, see
-[SDK-REFERENCE.md](SDK-REFERENCE.md)): a **CustomView** session (no app installed
-on the glasses) already grants **audio, photo, brightness/volume, and a rendered
-HUD view**. "Custom command" needs CustomApp, which we don't need — we drive
-everything from the phone. So CustomView is the minimal, no‑install path.
+> **Custom commands (glasses → phone) work only in a CustomApp session, not CustomView.**
 
-Push‑to‑talk can use either microphone (`Config.MIC_SOURCE`):
-- **PHONE** — phone mic + `android.speech.SpeechRecognizer`. Zero setup.
-- **GLASSES** — glasses mic via the CXR‑L PCM stream (`startAudioStream`) fed to an
-  **on‑device Vosk** recognizer. Talk with the phone pocketed; still fully private
-  (offline STT, nothing leaves the phone). Needs a Vosk model in assets.
+So we install a tiny app on the glasses (`havoice-glass`) that catches the gesture and
+relays it. CustomApp + app‑opened also grants **audio, photo, custom command** — so the
+same session streams the glasses mic to the phone. Trade‑off vs. CustomView: an APK is
+installed on the glasses (done automatically by the phone via `appUploadAndInstall`).
 
-The reply is also **read aloud** (`Config.TTS_ENABLED`) via the phone's
-`TextToSpeech`; when the glasses are the phone's active Bluetooth audio output, you
-hear it in the glasses. CXR‑L has **no** "play audio on glasses" API (its audio
-capability is mic capture only), so phone‑side TTS + BT routing is the path.
+## Gesture & endpointing
 
-## Backend contract (already live)
+- **Trigger**: `ACTION_TWO_FINGER_SINGLE_TAP` on the glasses touchpad (interceptable).
+  Reserved gestures we avoid: touchpad **long‑press** (Rokid AI app), top‑button
+  tap/long‑press (photo/video), button **double‑tap** (Back).
+- **Auto‑stop**: no release needed. The phone finalizes on Vosk silence endpointing or
+  a `SILENCE_MS` (1.5 s) quiet timer after the last words; `NO_SPEECH_MS` (6 s) cancels
+  if nothing is said; `MAX_UTTERANCE_MS` (12 s) is a hard cap.
+
+## STT & TTS
+
+- **STT**: glasses mic → CXR‑L PCM (**16 kHz mono 16‑bit**) → **on‑device Vosk**
+  (`GlassMic.kt`). Offline, nothing leaves the phone. Needs a Vosk model in the phone
+  app's assets (see app README). `Config.MIC_SOURCE = PHONE` falls back to the phone mic.
+- **TTS**: the reply is read aloud via the phone's `TextToSpeech` (`Tts.kt`). CXR‑L has
+  **no** "play on glasses" API, so this comes out of the glasses only when they're the
+  phone's active **Bluetooth audio** output.
+
+## Backend contract (already live, unchanged)
 
 ```sh
 curl -s -X POST http://192.168.100.21:8100/run \
@@ -57,60 +67,60 @@ curl -s -X POST http://192.168.100.21:8100/run \
   -d '{"task": "Answer concisely for a small display: turn on the study light"}'
 ```
 
-- Host: `k11-services` — LAN `192.168.100.21:8100`, or tailnet
-  `k11-services.border-balance.ts.net:8100` when the phone is on Tailscale (works
-  away from home). The orchestrator is **not** publicly exposed; keep it that way.
-- Body: `{"task": string, "history"?: [{role, content}]}`. Stateless; multi‑turn is
-  driven by the client sending recent turns (orchestrator trims to 8 pairs).
-- We reuse the g2‑agent trick of prefixing `"Answer concisely for a small display: "`
-  so replies fit the 480×640 HUD (same as your G2 glasses do via :8094).
+- Host `k11-services`: LAN `192.168.100.21:8100`, or tailnet
+  `k11-services.border-balance.ts.net:8100`. Not publicly exposed — keep it that way.
+- Body `{"task": string, "history"?: [{role, content}]}`; returns `{"result": "..."}`.
+- We prefix `"Answer concisely for a small display: "` so replies fit the 480×640 HUD.
 
-## CXR‑L API this app uses (from `client-l:1.0.4`)
+## CXR APIs used
+
+**Phone (CXR‑L, `client-l:1.0.4`)** — `GlassSession.kt`:
 
 | Step | Call |
 |------|------|
-| Auth | `AuthorizationHelper.requestAuthorization(act, [MICROPHONE], REQ)` → `parseAuthorizationResult` → `AuthResult.AuthSuccess.token` |
-| Create session | `CXRLink(ctx).configCXRSession(CxrDefs.CXRSession(CUSTOMVIEW))` |
-| Callbacks | `setCXRLinkCbk(ICXRLinkCbk)` — ready when `onCXRLConnected` && `onGlassBtConnected` |
-| Connect | `link.connect(token)` |
-| Open HUD | `link.setCXRCustomViewCbk(cbk)`; `link.customViewOpen(layoutJson)` |
-| Update HUD | `link.customViewUpdate([{ "action":"update","id":"textView","props":{"text": "..."} }])` |
-| Close | `link.customViewClose()` |
-| Glasses mic | `link.setCXRAudioCbk(cbk)`; `link.startAudioStream(1)` / `stopAudioStream()` — PCM **16 kHz mono 16‑bit** via `onAudioReceived(data, offset, length)`; needs an open CustomView + MICROPHONE glass permission |
+| Auth | `AuthorizationHelper.requestAuthorization(act, [MICROPHONE], REQ)` → `AuthResult.AuthSuccess.token` |
+| Session | `CXRLink(ctx).configCXRSession(CxrDefs.CXRSession(CUSTOMAPP, GLASS_PACKAGE))`; `connect(token)` |
+| Install/start glass app | `appIsInstalled` / `appUploadAndInstall(apk)` / `appStart(entry)` via `IGlassAppCbk` |
+| Custom cmd (recv) | `setCXRCustomCmdCbk{ onCustomCmdResult(key, payload) }` → `Caps.fromBytes` |
+| Custom cmd (send) | `sendCustomCmd(PHONE_TO_GLASS_KEY, Caps{write(cmd); write(text)})` |
+| Glasses mic | `setCXRAudioCbk(cbk)`; `startAudioStream(1)` / `stopAudioStream()` |
 
-HUD layout JSON (root LinearLayout `#FF000000`, TextView id `textView` `#00FF00`) is
-built in `Hud.kt`. See the official sample at
-[`../vendor-sdk/CXRLSample`](../vendor-sdk/CXRLSample) for the full API surface
-(audio PCM, photo, device control, CustomApp).
+**Glasses (CXR‑S, `cxr-service-bridge`)** — `havoice-glass/MainActivity.kt`:
+
+| Step | Call |
+|------|------|
+| Bridge | `CXRServiceBridge()`; `setStatusListener(...)` |
+| Recv from phone | `subscribe(PHONE_TO_GLASS_KEY, MsgCallback{ onReceive(name, args, bytes) })` |
+| Send to phone | `sendMessage(GLASS_TO_PHONE_KEY, Caps{write("ptt_start")})` |
+| Gesture | `RokidKeyReceiver` (ordered broadcast) → `TWO_FINGER_SINGLE_TAP` |
+
+Protocol constants live in `havoice-glass/Protocol.kt` and are mirrored in the phone's
+`Config.kt` (`GLASS_TO_PHONE_KEY="hv_glass"`, `PHONE_TO_GLASS_KEY="hv_phone"`, …).
+
+## Build & install choreography
+
+1. Build the glasses app → copy its APK to the phone app's assets as `glass.apk`
+   (see `apps/ha-voice/app/src/main/assets/glass.apk.README.md`).
+2. Add the Vosk model to `apps/ha-voice/.../assets/vosk-model-en/` (phone STT).
+3. Install the **phone** app. On first connect it auto‑installs `havoice-glass` onto the
+   glasses and starts it.
 
 ## Prerequisites
 
-1. **Rokid AI app** (`com.rokid.sprite.aiapp`) or **Hi Rokid**
-   (`com.rokid.sprite.global.aiapp`) installed on the phone and **paired with the
-   glasses** — this is what issues the auth token and carries the BLE link.
-2. Phone can reach the orchestrator: same Wi‑Fi as `192.168.100.21`, **or** phone
-   on your tailnet (recommended for away‑from‑home).
-3. Build with the `maven.rokid.com` repo (already in `settings.gradle.kts`).
-
-## Flow in the app
-
-1. Launch → check Rokid AI app installed → `Authorize` → token.
-2. `Connect` → CustomView session opens; HUD shows "Ready".
-3. Hold the **Talk** button → speak ("turn on the study light") → release.
-4. STT text → `POST /run` → reply → `customViewUpdate` shows it on the HUD.
-5. Recent turns kept in memory and sent as `history` for follow‑ups
-   ("…and the kitchen too").
-
-## Implemented
-
-- **Glasses‑mic capture** (`Config.MIC_SOURCE = GLASSES`) — CXR‑L PCM → Vosk offline
-  STT (`GlassMic.kt`). Phone mic still available as `PHONE`.
-- **TTS read‑back** (`Config.TTS_ENABLED`) — phone `TextToSpeech` (`Tts.kt`), routed
-  to the glasses when they're the active BT audio device.
+1. **Rokid AI app** (`com.rokid.sprite.aiapp`) / **Hi Rokid** paired with the glasses
+   (issues the token + carries the link).
+2. Phone reaches the orchestrator (home Wi‑Fi or tailnet).
+3. Build both apps against `maven.rokid.com` (already in `settings.gradle.kts`).
 
 ## Not yet (easy follow‑ups)
 
-- An on‑device wake phrase (Option B+) instead of push‑to‑talk. Note CXR‑L already
-  surfaces `onGlassAiInterrupt` (the glasses' own wake) — could trigger capture.
+- Wake‑phrase instead of tap (CXR‑L surfaces `onGlassAiInterrupt`, the glasses' own wake).
 - Streaming/partial HUD updates as the reply generates.
-- CustomApp mode if you later want on‑glasses buttons to trigger capture.
+- On‑glasses replies with richer layout, or a "cancel" gesture mid‑capture.
+
+## Needs on‑device iteration (can't verify without hardware)
+
+- The exact CXR‑L↔CXR‑S custom‑command name routing (mirrored from the samples).
+- The `appUploadAndInstall` install flow / signing policy for the glass APK.
+- Whether the glasses expose a Bluetooth **A2DP** route so TTS plays through them.
+- Vosk accuracy on the glasses' far‑field mic; tune `SILENCE_MS` to taste.

@@ -7,7 +7,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -25,12 +23,17 @@ import com.rokid.sprite.aiapp.externalapp.auth.GlassPermission
 import kotlinx.coroutines.launch
 
 /**
- * HA-Voice: push-to-talk on the phone → orchestrator (/run, ha_control) → reply on the
- * Rokid HUD via CXR-L CustomView. See docs/HA-VOICE.md for the full design.
+ * HA-Voice (CustomApp mode). A two-finger tap on the glasses touchpad starts listening;
+ * the glasses mic streams to the phone, which transcribes (Vosk), calls the orchestrator
+ * (/run → ha_control), shows the reply on the glasses HUD, and reads it aloud.
+ * The on-screen "Talk" button is a fallback for the same flow. See docs/HA-VOICE.md.
  */
 class MainActivity : ComponentActivity() {
 
-    private val session = GlassSession { ev -> runOnUiThread { status = ev } }
+    private val session = GlassSession(
+        onEvent = { ev -> runOnUiThread { status = ev } },
+        onPtt = { runOnUiThread { startListening() } },   // two-finger tap on the glasses
+    )
     private lateinit var speech: SpeechInput
     private lateinit var glassMic: GlassMic
     private var tts: Tts? = null
@@ -62,7 +65,7 @@ class MainActivity : ComponentActivity() {
         glassMic = GlassMic(this, session, onPartial, onResult, onErr)
 
         if (usingGlassesMic) {
-            glassMic.loadModel()            // async unpack of the Vosk model from assets
+            glassMic.loadModel()
         } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -74,26 +77,21 @@ class MainActivity : ComponentActivity() {
         setContent { HaVoiceScreen() }
     }
 
-    // Push-to-talk dispatch: phone mic (SpeechRecognizer) or glasses mic (CXR-L PCM + Vosk).
+    // Tap-to-talk (from the glasses two-finger tap or the fallback button). Auto-stops on silence.
     private fun startListening() {
+        if (listening || busy) return
         listening = true
         transcript = ""
         status = "Listening…"
+        session.sendStatus("Listening…")
         if (usingGlassesMic) glassMic.start() else speech.start()
-    }
-
-    private fun stopListening() {
-        if (usingGlassesMic) glassMic.stop() else speech.stop()
     }
 
     // ---- Auth: launches the Rokid AI companion app, token returns via onActivityResult ----
     private fun authorize() {
         val immediate = AuthorizationHelper.requestAuthorization(
-            this,
-            arrayOf(GlassPermission.MICROPHONE),
-            Config.REQUEST_CODE_AUTH,
+            this, arrayOf(GlassPermission.MICROPHONE), Config.REQUEST_CODE_AUTH,
         )
-        // Non-null => cached authorization returned synchronously; else wait for onActivityResult.
         immediate?.let { handleAuthResult(it.first, it.second) }
     }
 
@@ -117,12 +115,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---- Voice → orchestrator → HUD ----
+    // ---- Voice → orchestrator → glasses HUD ----
     private fun onUtterance(text: String) {
         transcript = text
         busy = true
         status = "Thinking…"
-        session.updateHud("…")
+        session.sendStatus("Thinking…")
         lifecycleScope.launch {
             val answer = Orchestrator.run(text, history.toList())
             history += Turn("user", text)
@@ -131,8 +129,8 @@ class MainActivity : ComponentActivity() {
             reply = answer
             busy = false
             status = "Done"
-            session.updateHud(answer)
-            tts?.speak(answer)          // read aloud (through the glasses if they're the BT output)
+            session.sendReply(answer)          // render on the glasses HUD
+            tts?.speak(answer)                 // and read aloud (through the glasses over BT)
         }
     }
 
@@ -149,11 +147,12 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // ---- UI ----
+    // ---- UI (phone is a control panel; the glasses show the HUD) ----
     @Composable
     private fun HaVoiceScreen() {
         val ready by session.ready.collectAsState()
-        val hudOpen by session.hudOpen.collectAsState()
+        val appReady by session.appReady.collectAsState()
+        val canTalk = ready && appReady && !busy && (!usingGlassesMic || glassMic.isModelReady)
 
         MaterialTheme {
             Surface(Modifier.fillMaxSize()) {
@@ -164,7 +163,7 @@ class MainActivity : ComponentActivity() {
                     Text("HA Voice — Rokid", style = MaterialTheme.typography.headlineSmall)
                     StatusRow("Authorized", authed)
                     StatusRow("Glasses linked", ready)
-                    StatusRow("HUD open", hudOpen)
+                    StatusRow("Glasses app running", appReady)
                     Text(status, style = MaterialTheme.typography.bodyMedium)
 
                     Spacer(Modifier.height(4.dp))
@@ -175,35 +174,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    if (ready && !hudOpen) {
-                        Button(onClick = { session.showHud("Ready") }, Modifier.fillMaxWidth()) {
-                            Text("Open HUD")
-                        }
-                    }
-
-                    // Glasses mic needs an open HUD (CustomView scene) to stream audio.
-                    val canTalk = ready && !busy && (!usingGlassesMic || hudOpen)
-
-                    Button(
-                        onClick = {},
-                        enabled = canTalk,
-                        modifier = Modifier.fillMaxWidth().height(96.dp).pointerInput(canTalk) {
-                            detectTapGestures(onPress = {
-                                if (canTalk) {
-                                    startListening()
-                                    tryAwaitRelease()
-                                    stopListening() // finalize → onResult
-                                }
-                            })
-                        },
-                    ) {
-                        Text(if (listening) "Listening… release to send" else "Hold to talk")
-                    }
                     Text(
-                        "Mic: ${if (usingGlassesMic) "glasses" else "phone"}" +
-                            if (Config.TTS_ENABLED) " · reply read aloud" else "",
-                        style = MaterialTheme.typography.labelSmall,
+                        "Two-finger tap the glasses touchpad to talk. Auto-stops when you pause.",
+                        style = MaterialTheme.typography.bodySmall,
                     )
+                    Button(
+                        onClick = { startListening() },
+                        enabled = canTalk,
+                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                    ) {
+                        Text(if (listening) "Listening…" else "Talk (fallback)")
+                    }
 
                     if (transcript.isNotEmpty()) LabeledBox("You said", transcript)
                     if (reply.isNotEmpty()) LabeledBox("Reply (on HUD)", reply)
@@ -216,7 +197,8 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Text(
-                        "Endpoint: ${Config.ORCHESTRATOR_URL}",
+                        "Endpoint: ${Config.ORCHESTRATOR_URL} · mic: ${if (usingGlassesMic) "glasses" else "phone"}" +
+                            if (Config.TTS_ENABLED) " · reply read aloud" else "",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }

@@ -60,11 +60,16 @@ Maven coordinates, and code samples.
 
 ### Project: voice-control Home Assistant
 
-[`apps/ha-voice`](apps/ha-voice) is a **CXR-L phone app** that lets the glasses
-control Home Assistant by reusing an existing homelab **orchestrator** (`:8100/run`
-with an `ha_control` tool): push-to-talk on the phone → phone STT → orchestrator →
-reply drawn on the glasses HUD. Fully private (no public endpoint, no on-glasses
-install). Design + data flow in [docs/HA-VOICE.md](docs/HA-VOICE.md).
+Two apps that reuse an existing homelab **orchestrator** (`:8100/run` with an
+`ha_control` tool) to control Home Assistant, fully private (no public endpoint):
+- [`apps/ha-voice`](apps/ha-voice) — **CXR-L phone app**: does auth, STT (on-device
+  Vosk), the orchestrator call, and TTS.
+- [`apps/havoice-glass`](apps/havoice-glass) — **CXR-S on-glasses app**: a two-finger
+  touchpad tap starts listening; it renders the reply on the HUD.
+
+Flow: two-finger tap → glasses mic → phone Vosk STT (auto-stops on silence) →
+orchestrator → reply on the glasses HUD + read aloud. Design + data flow in
+[docs/HA-VOICE.md](docs/HA-VOICE.md).
 
 ---
 
@@ -101,7 +106,8 @@ rokid-yoda/
 │   └── APP-IDEAS.md          ← project ideas + what the community has already built
 ├── apps/
 │   ├── hello-hud/            ← buildable on-glasses starter app (Kotlin + Gradle)
-│   └── ha-voice/            ← PHONE app: voice-control Home Assistant via your orchestrator
+│   ├── ha-voice/            ← PHONE app: voice-control Home Assistant via your orchestrator
+│   └── havoice-glass/      ← on-GLASSES companion: two-finger-tap trigger + HUD for ha-voice
 ├── vendor-sdk/
 │   ├── CXRSSDKSamples/       ← Rokid's OFFICIAL on-glasses (CXR-S) sample project
 │   └── CXRLSample/          ← Rokid's OFFICIAL phone (CXR-L) sample project

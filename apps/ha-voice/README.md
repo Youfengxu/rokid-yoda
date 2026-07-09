@@ -1,25 +1,27 @@
 # ha-voice
 
-**Phone app** that lets your Rokid glasses control **Home Assistant** through your
-existing homelab **orchestrator** (`:8100/run` → `ha_control`). Push‑to‑talk on the
-phone; the answer is drawn on the glasses HUD.
+**Phone app** (CXR‑L) that lets your Rokid glasses control **Home Assistant** through
+your existing homelab **orchestrator** (`:8100/run` → `ha_control`). You **two‑finger
+tap the glasses touchpad** and speak; the answer shows on the glasses HUD and is read
+aloud. Pairs with the on‑glasses app [`../havoice-glass`](../havoice-glass).
 
 Full design + data flow: [../../docs/HA-VOICE.md](../../docs/HA-VOICE.md).
 
 ```
-Hold "Talk" (phone) ─speak→ phone STT ─text→ POST /run ─→ ha_control ─→ HA
-                                                   │
-                          reply drawn on glasses HUD ◄──── CXR-L CustomView
+Two-finger tap (glasses) → glasses mic → phone Vosk STT → POST /run → ha_control → HA
+                                              reply → glasses HUD + phone TTS
 ```
 
 ## What it does
 
 - Authorizes via the **Rokid AI / Hi Rokid** app to get a session token.
-- Opens a **CXR‑L CustomView** session (no app installed on the glasses).
-- **Push‑to‑talk**: hold the button, speak (e.g. "turn on the study light"),
-  release → speech‑to‑text.
-- `POST` the text to the orchestrator; renders the reply on the HUD
-  (black bg / green text) and **reads it aloud**. Keeps recent turns for follow‑ups.
+- Opens a **CXR‑L CustomApp** session and **auto‑installs + starts** the on‑glasses
+  companion (`havoice-glass`).
+- On a **two‑finger touchpad tap** (relayed from the glasses), streams the **glasses
+  mic** to the phone, transcribes on‑device (Vosk), and **auto‑stops on silence**.
+- `POST`s the text to the orchestrator; sends the reply back to the glasses HUD and
+  **reads it aloud**. Keeps recent turns for follow‑ups. An on‑screen "Talk" button is
+  a fallback for the same flow.
 
 ## Mic source & TTS (`Config.kt`)
 
@@ -55,28 +57,37 @@ rm -rf vosk-model-small-en-us-0.15 vosk-model-small-en-us-0.15.zip
    `res/xml/network_security_config.xml`.
 3. Build against `maven.rokid.com` (already in `settings.gradle.kts`).
 
-## Build & install (to your PHONE, not the glasses)
+## Build & install
+
+Order matters — the phone app bundles the glasses APK and the Vosk model:
 
 ```bash
-cd apps/ha-voice
+# 1. Build the on-glasses companion and drop its APK into this app's assets
+cd apps/havoice-glass && ./gradlew assembleDebug
+cp app/build/outputs/apk/debug/app-debug.apk \
+   ../ha-voice/app/src/main/assets/glass.apk
+# 2. Add the Vosk model (see the assets/vosk-model-en/PLACEHOLDER.md)
+# 3. Build + install the PHONE app (not the glasses)
+cd ../ha-voice
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`local.properties` must point at your Android SDK (`sdk.dir=…`).
+`local.properties` must point at your Android SDK (`sdk.dir=…`). On first connect the
+phone auto‑installs and starts `havoice-glass` on the glasses. See
+`assets/glass.apk.README.md`.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `MainActivity.kt` | Compose UI: auth → connect → push‑to‑talk → show + speak reply |
-| `GlassSession.kt` | CXR‑L `CXRLink` lifecycle: CustomView HUD + glasses audio stream |
-| `Hud.kt` | Builds the CustomView layout/update JSON (black/green) |
-| `SpeechInput.kt` | Phone `SpeechRecognizer` push‑to‑talk (MIC_SOURCE = PHONE) |
-| `GlassMic.kt` | Glasses‑mic PCM → offline Vosk STT (MIC_SOURCE = GLASSES) |
+| `MainActivity.kt` | Compose control panel: auth → connect → tap‑to‑talk → speak reply |
+| `GlassSession.kt` | CXR‑L CustomApp: install/start glass app, custom commands, audio |
+| `SpeechInput.kt` | Phone `SpeechRecognizer` fallback (MIC_SOURCE = PHONE) |
+| `GlassMic.kt` | Glasses‑mic PCM → offline Vosk STT + silence auto‑stop (GLASSES) |
 | `Tts.kt` | Reads the reply aloud via phone `TextToSpeech` (→ glasses over BT) |
 | `Orchestrator.kt` | `POST /run` client (task + history) |
-| `Config.kt` | Orchestrator URL, mic source, TTS toggle, HUD prefix, history depth |
+| `Config.kt` | Orchestrator URL, glass package, protocol keys, silence timings, TTS |
 
 ## Verify the backend independently
 

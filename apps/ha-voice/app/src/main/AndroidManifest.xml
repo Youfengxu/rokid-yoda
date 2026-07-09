@@ -14,6 +14,8 @@
     <queries>
         <package android:name="com.rokid.sprite.aiapp" />
         <package android:name="com.rokid.sprite.global.aiapp" />
+        <!-- The on-glasses companion we install/start via CXR-L CustomApp. -->
+        <package android:name="com.rokidyoda.havoiceglass" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>

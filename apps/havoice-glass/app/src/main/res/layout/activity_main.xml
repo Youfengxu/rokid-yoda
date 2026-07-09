@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HUD for the 480x640 green-mono display: black bg, one big green line, centered. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/hud_background">
+
+    <TextView
+        android:id="@+id/hud_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:padding="24dp"
+        android:textColor="@color/hud_foreground"
+        android:textSize="34sp"
+        android:textStyle="bold" />
+
+</FrameLayout>

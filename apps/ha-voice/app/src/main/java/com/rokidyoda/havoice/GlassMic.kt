@@ -1,6 +1,8 @@
 package com.rokidyoda.havoice
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.rokid.cxr.link.callbacks.IAudioStreamCbk
 import org.json.JSONObject
@@ -9,12 +11,15 @@ import org.vosk.Recognizer
 import org.vosk.android.StorageService
 
 /**
- * Push-to-talk speech capture from the GLASSES microphone.
+ * Tap-to-talk speech capture from the GLASSES microphone, with automatic stop on silence.
  *
  * The glasses stream 16 kHz mono 16-bit PCM over CXR-L ([GlassSession.startAudioStream]).
- * We feed that PCM into an on-device Vosk recognizer — fully offline, so nothing leaves
- * the phone (keeps the "no self-hosted STT / private" property while letting you talk with
- * the phone pocketed). The model is loaded from assets; see README (Config.VOSK_MODEL_ASSET).
+ * We feed it to an on-device Vosk recognizer (offline → private). Once started (by a
+ * two-finger tap), it auto-finalizes when the speaker goes quiet — no release needed:
+ *  - Vosk endpointing (silence) → finalize, and/or
+ *  - a [Config.SILENCE_MS] timer since the last new words,
+ *  - [Config.NO_SPEECH_MS] with nothing said → cancel,
+ *  - [Config.MAX_UTTERANCE_MS] hard cap.
  */
 class GlassMic(
     private val context: Context,
@@ -24,19 +29,25 @@ class GlassMic(
     private val onError: (String) -> Unit,
 ) {
     private val tag = "GlassMic"
+    private val main = Handler(Looper.getMainLooper())
+
     private var model: Model? = null
     private var recognizer: Recognizer? = null
     private val segments = StringBuilder()
+    private var lastPartialLen = 0
+    @Volatile private var finalizing = false
 
     val isModelReady: Boolean get() = model != null
+
+    private val onSilence = Runnable { finalizeUtterance() }
+    private val onNoSpeech = Runnable { finalizeUtterance() }
+    private val onMaxDuration = Runnable { finalizeUtterance() }
 
     /** Unpack + load the Vosk model from assets (async). Call once at startup. */
     fun loadModel() {
         if (model != null) return
         StorageService.unpack(
-            context,
-            Config.VOSK_MODEL_ASSET,
-            "vosk-model",
+            context, Config.VOSK_MODEL_ASSET, "vosk-model",
             { m -> model = m; Log.i(tag, "Vosk model ready") },
             { e -> Log.e(tag, "Vosk model load failed", e); onError("STT model missing (${Config.VOSK_MODEL_ASSET})") },
         )
@@ -45,30 +56,48 @@ class GlassMic(
     fun start(): Boolean {
         val m = model ?: run { onError("STT model still loading"); return false }
         segments.setLength(0)
+        lastPartialLen = 0
+        finalizing = false
         recognizer = Recognizer(m, 16_000.0f)
         val ok = session.startAudioStream(audioCbk)
-        if (!ok) { onError("Glasses not ready for audio"); recognizer?.close(); recognizer = null }
-        return ok
+        if (!ok) { onError("Glasses not ready for audio"); recognizer?.close(); recognizer = null; return false }
+        main.postDelayed(onNoSpeech, Config.NO_SPEECH_MS)
+        main.postDelayed(onMaxDuration, Config.MAX_UTTERANCE_MS)
+        return true
     }
 
-    /** Stop streaming and deliver the final transcript. */
-    fun stop() {
+    /** Cancel without delivering a result (e.g. on teardown). */
+    fun cancel() {
+        finalizing = true
+        clearTimers()
+        session.stopAudioStream()
+        runCatching { recognizer?.close() }
+        recognizer = null
+    }
+
+    fun destroy() {
+        cancel()
+        model?.close()
+        model = null
+    }
+
+    private fun finalizeUtterance() {
+        if (finalizing) return
+        finalizing = true
+        clearTimers()
         session.stopAudioStream()
         val rec = recognizer ?: return
-        runCatching {
-            appendText(JSONObject(rec.finalResult).optString("text"))
-        }
+        runCatching { appendText(JSONObject(rec.finalResult).optString("text")) }
         recognizer = null
         rec.close()
         val text = segments.toString().trim()
         if (text.isEmpty()) onError("Didn't catch that") else onResult(text)
     }
 
-    fun destroy() {
-        runCatching { recognizer?.close() }
-        recognizer = null
-        model?.close()
-        model = null
+    private fun clearTimers() {
+        main.removeCallbacks(onSilence)
+        main.removeCallbacks(onNoSpeech)
+        main.removeCallbacks(onMaxDuration)
     }
 
     private fun appendText(part: String?) {
@@ -81,8 +110,7 @@ class GlassMic(
     private val audioCbk = object : IAudioStreamCbk {
         override fun onAudioReceived(data: ByteArray?, offset: Int, length: Int) {
             val rec = recognizer ?: return
-            if (data == null || length <= 0) return
-            // Vosk's acceptWaveForm reads from index 0, so slice the SDK's [offset,length).
+            if (finalizing || data == null || length <= 0) return
             val safeOffset = if (offset in 0 until data.size) offset else 0
             val safeLen = minOf(length, data.size - safeOffset).coerceAtLeast(0)
             if (safeLen <= 0) return
@@ -90,16 +118,26 @@ class GlassMic(
                         else data.copyOfRange(safeOffset, safeOffset + safeLen)
             runCatching {
                 if (rec.acceptWaveForm(chunk, safeLen)) {
+                    // Vosk detected an endpoint (silence): utterance segment complete.
                     appendText(JSONObject(rec.result).optString("text"))
+                    if (segments.isNotEmpty()) main.post { finalizeUtterance() }
                 } else {
-                    JSONObject(rec.partialResult).optString("partial")
-                        .takeIf { it.isNotBlank() }?.let(onPartial)
+                    val partial = JSONObject(rec.partialResult).optString("partial")
+                    if (partial.length > lastPartialLen) {
+                        lastPartialLen = partial.length
+                        onPartial(partial)
+                        // New words → not silent; (re)arm the silence timer, drop no-speech.
+                        main.removeCallbacks(onNoSpeech)
+                        main.removeCallbacks(onSilence)
+                        main.postDelayed(onSilence, Config.SILENCE_MS)
+                    }
                 }
             }.onFailure { Log.e(tag, "vosk feed failed", it) }
         }
 
         override fun onAudioError(errorCode: Int, errorInfo: String?) {
             onError("Glasses audio error $errorCode: ${errorInfo ?: ""}")
+            main.post { cancel() }
         }
 
         override fun onAudioStreamStateChanged(started: Boolean) {

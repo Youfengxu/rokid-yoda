@@ -18,3 +18,6 @@ vendor-sdk/*.zip
 # Vosk STT models (~40MB) — download locally; keep only the placeholder
 apps/*/app/src/main/assets/vosk-model-*/**
 !apps/*/app/src/main/assets/vosk-model-*/PLACEHOLDER.md
+
+# Bundled on-glasses companion APK (build output of apps/havoice-glass)
+apps/ha-voice/app/src/main/assets/glass.apk
