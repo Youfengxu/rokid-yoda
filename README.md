@@ -120,6 +120,34 @@ rokid-yoda/
 
 ---
 
+## Replicate on another Mac (verified, no Android Studio)
+
+Both apps build with a command‑line toolchain on Apple Silicon:
+
+```bash
+# 1. Clone
+git clone https://github.com/Youfengxu/rokid-yoda.git && cd rokid-yoda
+
+# 2. Toolchain (JDK 17 + Android SDK), ~1–2 GB
+brew install openjdk@17
+brew install --cask android-commandlinetools
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "platforms;android-34" "build-tools;35.0.0"
+
+# 3. Point each app at the SDK (local.properties is gitignored)
+echo "sdk.dir=$ANDROID_HOME" | tee apps/ha-voice/local.properties apps/havoice-glass/local.properties
+
+# 4. Build both + install to a connected phone
+./scripts/build-havoice.sh
+```
+
+Not in git (regenerate locally): `local.properties`, the bundled `glass.apk`
+(`build-havoice.sh` rebuilds it), and the Vosk model (only for the real voice flow —
+see [apps/ha-voice/.../assets/vosk-model-en/PLACEHOLDER.md](apps/ha-voice/app/src/main/assets/vosk-model-en/PLACEHOLDER.md)).
+The `DEBUG_ECHO` smoke test needs neither the model nor the orchestrator.
+
 ## Important caveats (read before you sink time in)
 
 - **The SDK + docs live behind a login** at [open.rokid.com](https://open.rokid.com)
