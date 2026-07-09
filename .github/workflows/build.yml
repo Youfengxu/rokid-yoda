@@ -1,0 +1,60 @@
+name: Build APKs
+
+# Builds the on-glasses app, bundles it into the phone app, builds the phone app,
+# and uploads both as downloadable artifacts. No toolchain needed locally — grab the
+# APK from the run's "Artifacts" section.
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ '**/*.md', 'docs/**' ]
+  pull_request:
+    paths-ignore: [ '**/*.md', 'docs/**' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-34" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build on-glasses app (havoice-glass)
+        working-directory: apps/havoice-glass
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Bundle glass.apk into the phone app
+        run: cp apps/havoice-glass/app/build/outputs/apk/debug/app-debug.apk apps/ha-voice/app/src/main/assets/glass.apk
+
+      - name: Build phone app (ha-voice)
+        working-directory: apps/ha-voice
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Stage APKs
+        run: |
+          mkdir -p out
+          cp apps/ha-voice/app/build/outputs/apk/debug/app-debug.apk out/ha-voice.apk
+          cp apps/havoice-glass/app/build/outputs/apk/debug/app-debug.apk out/havoice-glass.apk
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: rokid-havoice-apks
+          path: out/
+          if-no-files-found: error
