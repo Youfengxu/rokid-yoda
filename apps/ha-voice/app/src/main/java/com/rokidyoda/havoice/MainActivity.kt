@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private var busy by mutableStateOf(false)
     private var taps by mutableStateOf(0)      // ptt_start events received from the glasses
     private var pings by mutableStateOf(0)
+    private var health by mutableStateOf("")
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -94,6 +95,12 @@ class MainActivity : ComponentActivity() {
         } else {
             startListening()
         }
+    }
+
+    /** Check the phone → orchestrator leg (independent of the glasses). */
+    private fun checkHealth() {
+        health = "Checking…"
+        lifecycleScope.launch { health = Orchestrator.health() }
     }
 
     /** Manually send a message to the glasses HUD — tests the phone→glasses direction. */
@@ -246,6 +253,14 @@ class MainActivity : ComponentActivity() {
                             session.release(); authed = false; reply = ""; transcript = ""
                             status = "Disconnected"
                         }, Modifier.fillMaxWidth()) { Text("Disconnect") }
+                    }
+
+                    HorizontalDivider()
+                    OutlinedButton(onClick = { checkHealth() }, Modifier.fillMaxWidth()) {
+                        Text("Check orchestrator /health")
+                    }
+                    if (health.isNotEmpty()) {
+                        Text(health, style = MaterialTheme.typography.bodyMedium)
                     }
 
                     Text(

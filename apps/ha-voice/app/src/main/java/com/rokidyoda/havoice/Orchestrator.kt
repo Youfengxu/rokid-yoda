@@ -17,6 +17,30 @@ data class Turn(val role: String, val content: String)
 object Orchestrator {
 
     /**
+     * GET the orchestrator's /health — quick check that the phone can reach the backend,
+     * independent of the glasses. Derived from ORCHESTRATOR_URL (…/run → …/health).
+     */
+    suspend fun health(): String = withContext(Dispatchers.IO) {
+        val url = Config.ORCHESTRATOR_URL.substringBeforeLast("/") + "/health"
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 5_000
+            readTimeout = 5_000
+        }
+        try {
+            val code = conn.responseCode
+            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.bufferedReader()?.use { it.readText() }?.trim().orEmpty()
+            if (code in 200..299) "✅ reachable ($code): ${body.take(80)}"
+            else "⚠️ HTTP $code: ${body.take(80)}"
+        } catch (e: Exception) {
+            "❌ unreachable: ${e.message}"
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /**
      * Sends [utterance] as a task, with recent [history] for follow-ups.
      * Returns the orchestrator's reply text (best-effort extracted from the JSON).
      * Runs on IO; call from a coroutine.
