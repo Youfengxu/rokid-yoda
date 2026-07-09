@@ -122,10 +122,16 @@ rokid-yoda/
 
 ## Replicate on another Mac (verified, no Android Studio)
 
+> Just want the APK? Skip all of this — grab it from **GitHub → Actions → latest run
+> → Artifacts → `rokid-havoice-apks`** (`ha-voice.apk`). No toolchain needed. The steps
+> below are only for building/developing locally.
+
 Both apps build with a command‑line toolchain on Apple Silicon:
 
 ```bash
-# 1. Clone
+# 1. Authenticate to GitHub (private repo — password auth won't work), then clone
+brew install gh
+gh auth login                     # GitHub.com → HTTPS → Login with a web browser
 git clone https://github.com/Youfengxu/rokid-yoda.git && cd rokid-yoda
 
 # 2. Toolchain (JDK 17 + Android SDK), ~1–2 GB
