@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- TTS read-back routing to the glasses' Bluetooth audio output. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- CXR-L talks to the glasses over BLE via the Rokid AI companion app. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 

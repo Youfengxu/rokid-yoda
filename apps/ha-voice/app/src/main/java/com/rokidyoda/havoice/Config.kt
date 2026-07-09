@@ -17,4 +17,24 @@ object Config {
     const val MAX_HISTORY_TURNS = 6
 
     const val REQUEST_CODE_AUTH = 1001
+
+    /** Where push-to-talk audio comes from. */
+    enum class MicSource { PHONE, GLASSES }
+
+    /**
+     * PHONE  = phone mic via SpeechRecognizer (works out of the box).
+     * GLASSES = glasses mic via CXR-L PCM stream + on-device Vosk STT (talk with phone
+     *           pocketed). Requires the Vosk model in assets — see [VOSK_MODEL_ASSET].
+     */
+    val MIC_SOURCE = MicSource.GLASSES
+
+    /**
+     * Folder name under app/src/main/assets/ holding an unpacked Vosk model
+     * (e.g. vosk-model-small-en-us-0.15 renamed to this). Gitignored — download it
+     * yourself; see apps/ha-voice/README.md. Glasses PCM is 16 kHz mono 16-bit.
+     */
+    const val VOSK_MODEL_ASSET = "vosk-model-en"
+
+    /** Read the reply aloud. Plays through the glasses when they're the active BT audio device. */
+    const val TTS_ENABLED = true
 }

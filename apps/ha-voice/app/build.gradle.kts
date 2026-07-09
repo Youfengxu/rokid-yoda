@@ -44,6 +44,10 @@ dependencies {
     // Rokid CXR-L phone SDK — verified coordinate from the official v1.0.4 sample.
     implementation("com.rokid.cxr:client-l:1.0.4")
 
+    // Offline on-device STT for the glasses-mic path (Config.MIC_SOURCE = GLASSES).
+    // Feeds the CXR-L PCM stream to Vosk; nothing leaves the phone.
+    implementation("com.alphacephei:vosk-android:0.3.47")
+
     // JSON is handled with org.json (bundled in Android) + HttpURLConnection —
     // no extra networking dependency needed.
 }

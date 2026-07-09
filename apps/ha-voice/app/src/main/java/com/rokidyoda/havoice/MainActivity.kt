@@ -32,7 +32,11 @@ class MainActivity : ComponentActivity() {
 
     private val session = GlassSession { ev -> runOnUiThread { status = ev } }
     private lateinit var speech: SpeechInput
+    private lateinit var glassMic: GlassMic
+    private var tts: Tts? = null
     private val history = mutableListOf<Turn>()
+
+    private val usingGlassesMic get() = Config.MIC_SOURCE == Config.MicSource.GLASSES
 
     // ---- UI state ----
     private var status by mutableStateOf("Not authorized")
@@ -50,18 +54,36 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        speech = SpeechInput(
-            context = this,
-            onPartial = { runOnUiThread { transcript = it } },
-            onResult = { text -> runOnUiThread { listening = false; onUtterance(text) } },
-            onError = { msg -> runOnUiThread { listening = false; status = msg } },
-        )
+        val onPartial: (String) -> Unit = { runOnUiThread { transcript = it } }
+        val onResult: (String) -> Unit = { text -> runOnUiThread { listening = false; onUtterance(text) } }
+        val onErr: (String) -> Unit = { msg -> runOnUiThread { listening = false; status = msg } }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        speech = SpeechInput(this, onPartial, onResult, onErr)
+        glassMic = GlassMic(this, session, onPartial, onResult, onErr)
+
+        if (usingGlassesMic) {
+            glassMic.loadModel()            // async unpack of the Vosk model from assets
+        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
-        ) micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        ) {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+
+        if (Config.TTS_ENABLED) tts = Tts(this)
 
         setContent { HaVoiceScreen() }
+    }
+
+    // Push-to-talk dispatch: phone mic (SpeechRecognizer) or glasses mic (CXR-L PCM + Vosk).
+    private fun startListening() {
+        listening = true
+        transcript = ""
+        status = "Listening…"
+        if (usingGlassesMic) glassMic.start() else speech.start()
+    }
+
+    private fun stopListening() {
+        if (usingGlassesMic) glassMic.stop() else speech.stop()
     }
 
     // ---- Auth: launches the Rokid AI companion app, token returns via onActivityResult ----
@@ -110,6 +132,7 @@ class MainActivity : ComponentActivity() {
             busy = false
             status = "Done"
             session.updateHud(answer)
+            tts?.speak(answer)          // read aloud (through the glasses if they're the BT output)
         }
     }
 
@@ -120,6 +143,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         speech.destroy()
+        glassMic.destroy()
+        tts?.shutdown()
         session.release()
         super.onDestroy()
     }
@@ -156,25 +181,29 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Push-to-talk
+                    // Glasses mic needs an open HUD (CustomView scene) to stream audio.
+                    val canTalk = ready && !busy && (!usingGlassesMic || hudOpen)
+
                     Button(
                         onClick = {},
-                        enabled = ready && !busy,
-                        modifier = Modifier.fillMaxWidth().height(96.dp).pointerInput(ready, busy) {
+                        enabled = canTalk,
+                        modifier = Modifier.fillMaxWidth().height(96.dp).pointerInput(canTalk) {
                             detectTapGestures(onPress = {
-                                if (ready && !busy) {
-                                    listening = true
-                                    transcript = ""
-                                    status = "Listening…"
-                                    speech.start()
+                                if (canTalk) {
+                                    startListening()
                                     tryAwaitRelease()
-                                    speech.stop() // finalize → onResult
+                                    stopListening() // finalize → onResult
                                 }
                             })
                         },
                     ) {
                         Text(if (listening) "Listening… release to send" else "Hold to talk")
                     }
+                    Text(
+                        "Mic: ${if (usingGlassesMic) "glasses" else "phone"}" +
+                            if (Config.TTS_ENABLED) " · reply read aloud" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
 
                     if (transcript.isNotEmpty()) LabeledBox("You said", transcript)
                     if (reply.isNotEmpty()) LabeledBox("Reply (on HUD)", reply)

@@ -38,10 +38,16 @@ on the glasses) already grants **audio, photo, brightness/volume, and a rendered
 HUD view**. "Custom command" needs CustomApp, which we don't need — we drive
 everything from the phone. So CustomView is the minimal, no‑install path.
 
-Push‑to‑talk uses the **phone's** microphone + `android.speech.SpeechRecognizer`
-(reliable, no server round trip for STT). Capturing the **glasses'** mic instead
-is possible later via the CXR‑L PCM audio stream (`AudioUsageViewModel` in the
-official sample) — deferred to keep v1 simple.
+Push‑to‑talk can use either microphone (`Config.MIC_SOURCE`):
+- **PHONE** — phone mic + `android.speech.SpeechRecognizer`. Zero setup.
+- **GLASSES** — glasses mic via the CXR‑L PCM stream (`startAudioStream`) fed to an
+  **on‑device Vosk** recognizer. Talk with the phone pocketed; still fully private
+  (offline STT, nothing leaves the phone). Needs a Vosk model in assets.
+
+The reply is also **read aloud** (`Config.TTS_ENABLED`) via the phone's
+`TextToSpeech`; when the glasses are the phone's active Bluetooth audio output, you
+hear it in the glasses. CXR‑L has **no** "play audio on glasses" API (its audio
+capability is mic capture only), so phone‑side TTS + BT routing is the path.
 
 ## Backend contract (already live)
 
@@ -70,6 +76,7 @@ curl -s -X POST http://192.168.100.21:8100/run \
 | Open HUD | `link.setCXRCustomViewCbk(cbk)`; `link.customViewOpen(layoutJson)` |
 | Update HUD | `link.customViewUpdate([{ "action":"update","id":"textView","props":{"text": "..."} }])` |
 | Close | `link.customViewClose()` |
+| Glasses mic | `link.setCXRAudioCbk(cbk)`; `link.startAudioStream(1)` / `stopAudioStream()` — PCM **16 kHz mono 16‑bit** via `onAudioReceived(data, offset, length)`; needs an open CustomView + MICROPHONE glass permission |
 
 HUD layout JSON (root LinearLayout `#FF000000`, TextView id `textView` `#00FF00`) is
 built in `Hud.kt`. See the official sample at
@@ -94,9 +101,16 @@ built in `Hud.kt`. See the official sample at
 5. Recent turns kept in memory and sent as `history` for follow‑ups
    ("…and the kitchen too").
 
-## Not in v1 (easy follow‑ups)
+## Implemented
 
-- Glasses‑mic capture via CXR‑L PCM stream (hands nearer to natural voice).
-- A wake phrase on‑device (Option B+) instead of push‑to‑talk.
-- Streaming/partial HUD updates; TTS read‑back via glasses audio.
+- **Glasses‑mic capture** (`Config.MIC_SOURCE = GLASSES`) — CXR‑L PCM → Vosk offline
+  STT (`GlassMic.kt`). Phone mic still available as `PHONE`.
+- **TTS read‑back** (`Config.TTS_ENABLED`) — phone `TextToSpeech` (`Tts.kt`), routed
+  to the glasses when they're the active BT audio device.
+
+## Not yet (easy follow‑ups)
+
+- An on‑device wake phrase (Option B+) instead of push‑to‑talk. Note CXR‑L already
+  surfaces `onGlassAiInterrupt` (the glasses' own wake) — could trigger capture.
+- Streaming/partial HUD updates as the reply generates.
 - CustomApp mode if you later want on‑glasses buttons to trigger capture.

@@ -3,6 +3,7 @@ package com.rokidyoda.havoice
 import android.content.Context
 import android.util.Log
 import com.rokid.cxr.link.CXRLink
+import com.rokid.cxr.link.callbacks.IAudioStreamCbk
 import com.rokid.cxr.link.callbacks.ICXRLinkCbk
 import com.rokid.cxr.link.callbacks.ICustomViewCbk
 import com.rokid.cxr.link.utils.CxrDefs
@@ -82,8 +83,26 @@ class GlassSession(private val onEvent: (String) -> Unit) {
         else if (_ready.value) l.customViewOpen(Hud.openLayout(text))
     }
 
+    /**
+     * Start streaming the glasses microphone (16 kHz mono 16-bit PCM) to [cbk].
+     * Requires an open CustomView (scene built) and MICROPHONE glass permission.
+     * codecType 1 = PCM. Returns false if the link isn't ready.
+     */
+    fun startAudioStream(cbk: IAudioStreamCbk): Boolean {
+        val l = link ?: return false
+        if (!_ready.value) return false
+        l.setCXRAudioCbk(cbk)
+        l.startAudioStream(1)
+        return true
+    }
+
+    fun stopAudioStream() {
+        runCatching { link?.stopAudioStream() }
+    }
+
     fun release() {
         link?.let { l ->
+            runCatching { l.stopAudioStream() }
             runCatching { if (_hudOpen.value) l.customViewClose() }
             runCatching { l.disconnect() }
         }

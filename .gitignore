@@ -14,3 +14,7 @@ captures/
 
 # Vendor SDK: keep the extracted sample source, ignore the large zip
 vendor-sdk/*.zip
+
+# Vosk STT models (~40MB) — download locally; keep only the placeholder
+apps/*/app/src/main/assets/vosk-model-*/**
+!apps/*/app/src/main/assets/vosk-model-*/PLACEHOLDER.md
