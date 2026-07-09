@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private val tag = "HaVoiceGlass"
     private lateinit var hud: TextView
     private val bridge = CXRServiceBridge()
+    private var taps = 0
 
     private val keyReceiver = RokidKeyReceiver { key ->
         if (key == RokidKey.TWO_FINGER_SINGLE_TAP) startPtt()
@@ -40,7 +41,7 @@ class MainActivity : AppCompatActivity() {
             if (args == null || args.size() < 2) return
             val cmd = args.at(0).string
             val text = args.at(1).string
-            Log.d(tag, "from phone: cmd=$cmd text=$text")
+            Log.i(tag, "from phone: cmd=$cmd text=$text")
             setHud(text)
         }
     }
@@ -68,12 +69,13 @@ class MainActivity : AppCompatActivity() {
         runCatching { unregisterReceiver(keyReceiver) }
     }
 
-    /** Tell the phone to start listening. */
+    /** Tell the phone to start listening (or, in the phone's DEBUG_ECHO mode, echo a pong). */
     private fun startPtt() {
+        taps++
         val caps = Caps().apply { write(Protocol.EVENT_PTT_START) }
         val rc = bridge.sendMessage(Protocol.GLASS_TO_PHONE_KEY, caps)
-        Log.d(tag, "sendMessage ptt_start rc=$rc")
-        setHud(if (rc == 0) "Listening…" else "Phone not linked")
+        Log.i(tag, "two-finger tap #$taps → sendMessage ptt_start rc=$rc")
+        setHud(if (rc == 0) "Tap #$taps sent…" else "Phone not linked")
     }
 
     private fun setHud(text: String) = runOnUiThread { hud.text = text }

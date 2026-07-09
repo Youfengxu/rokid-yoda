@@ -32,6 +32,14 @@ object Config {
     const val CMD_STATUS = "status"
     const val CMD_REPLY = "reply"
 
+    /**
+     * Debug channel smoke-test. When true, a two-finger tap makes the phone echo a
+     * "pong" straight back to the glasses HUD instead of capturing audio — proving the
+     * glasses↔phone custom-command channel end-to-end WITHOUT STT/orchestrator/model.
+     * Also enables a "Ping glasses" button. Set false for the real voice flow.
+     */
+    const val DEBUG_ECHO = true
+
     // ---- Voice capture ----
     enum class MicSource { PHONE, GLASSES }
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,7 +33,7 @@ class MainActivity : ComponentActivity() {
 
     private val session = GlassSession(
         onEvent = { ev -> runOnUiThread { status = ev } },
-        onPtt = { runOnUiThread { startListening() } },   // two-finger tap on the glasses
+        onPtt = { runOnUiThread { onGlassPtt() } },   // two-finger tap on the glasses
     )
     private lateinit var speech: SpeechInput
     private lateinit var glassMic: GlassMic
@@ -48,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private var authed by mutableStateOf(false)
     private var listening by mutableStateOf(false)
     private var busy by mutableStateOf(false)
+    private var taps by mutableStateOf(0)      // ptt_start events received from the glasses
+    private var pings by mutableStateOf(0)
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -64,17 +67,42 @@ class MainActivity : ComponentActivity() {
         speech = SpeechInput(this, onPartial, onResult, onErr)
         glassMic = GlassMic(this, session, onPartial, onResult, onErr)
 
-        if (usingGlassesMic) {
-            glassMic.loadModel()
-        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        // In DEBUG_ECHO we don't capture audio, so skip the Vosk model + mic permission.
+        if (!Config.DEBUG_ECHO) {
+            if (usingGlassesMic) {
+                glassMic.loadModel()
+            } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
         }
 
-        if (Config.TTS_ENABLED) tts = Tts(this)
+        if (Config.TTS_ENABLED && !Config.DEBUG_ECHO) tts = Tts(this)
 
         setContent { HaVoiceScreen() }
+    }
+
+    /** Two-finger tap arrived from the glasses. In DEBUG_ECHO, echo a pong; else listen. */
+    private fun onGlassPtt() {
+        taps++
+        Log.i("HaVoice", "ptt_start received (#$taps)")
+        if (Config.DEBUG_ECHO) {
+            val msg = "pong #$taps"
+            status = "Echoed $msg (tap #$taps received)"
+            session.sendReply(msg)
+        } else {
+            startListening()
+        }
+    }
+
+    /** Manually send a message to the glasses HUD — tests the phone→glasses direction. */
+    private fun pingGlasses() {
+        pings++
+        val msg = "ping #$pings"
+        status = "Sent $msg"
+        Log.i("HaVoice", "sending $msg to glasses")
+        session.sendReply(msg)
     }
 
     // Tap-to-talk (from the glasses two-finger tap or the fallback button). Auto-stops on silence.
@@ -152,7 +180,8 @@ class MainActivity : ComponentActivity() {
     private fun HaVoiceScreen() {
         val ready by session.ready.collectAsState()
         val appReady by session.appReady.collectAsState()
-        val canTalk = ready && appReady && !busy && (!usingGlassesMic || glassMic.isModelReady)
+        val canTalk = ready && appReady && !busy &&
+            (Config.DEBUG_ECHO || !usingGlassesMic || glassMic.isModelReady)
 
         MaterialTheme {
             Surface(Modifier.fillMaxSize()) {
@@ -174,16 +203,39 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    if (Config.DEBUG_ECHO) {
+                        HorizontalDivider()
+                        Text("DEBUG echo mode — channel test only, no STT/orchestrator",
+                            style = MaterialTheme.typography.labelMedium)
+                        Text("Two-finger tap the glasses → HUD should show \"pong #n\".",
+                            style = MaterialTheme.typography.bodySmall)
+                        Text("Taps received: $taps   ·   Pings sent: $pings",
+                            style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            onClick = { pingGlasses() },
+                            enabled = appReady,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Ping glasses HUD") }
+                        HorizontalDivider()
+                    }
+
                     Text(
-                        "Two-finger tap the glasses touchpad to talk. Auto-stops when you pause.",
+                        if (Config.DEBUG_ECHO) "Or use this button as a simulated tap:"
+                        else "Two-finger tap the glasses touchpad to talk. Auto-stops when you pause.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(
-                        onClick = { startListening() },
+                        onClick = { onGlassPtt() },
                         enabled = canTalk,
                         modifier = Modifier.fillMaxWidth().height(72.dp),
                     ) {
-                        Text(if (listening) "Listening…" else "Talk (fallback)")
+                        Text(
+                            when {
+                                Config.DEBUG_ECHO -> "Simulate tap (echo)"
+                                listening -> "Listening…"
+                                else -> "Talk (fallback)"
+                            }
+                        )
                     }
 
                     if (transcript.isNotEmpty()) LabeledBox("You said", transcript)

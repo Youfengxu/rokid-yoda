@@ -105,6 +105,28 @@ Protocol constants live in `havoice-glass/Protocol.kt` and are mirrored in the p
 3. Install the **phone** app. On first connect it auto‑installs `havoice-glass` onto the
    glasses and starts it.
 
+## Smoke test first (echo/ping, `Config.DEBUG_ECHO = true`)
+
+Before wiring STT/orchestrator, verify the glasses↔phone custom-command channel. With
+`DEBUG_ECHO = true` (default) the phone **echoes a pong** on tap instead of listening —
+no Vosk model, mic, or orchestrator needed. Only the glass APK is required.
+
+```bash
+adb logcat -s HaVoice HaVoiceGlass   # watch both sides
+```
+
+1. Install the phone app, authorize, wait for **Glasses app running** ✅ (auto-install).
+2. **Two-finger tap** the glasses touchpad → glass HUD shows `Tap #1 sent…` then
+   **`pong #1`**. That single round-trip proves both directions:
+   glasses→phone (`ptt_start`) and phone→glasses (`sendReply`).
+3. Tap **Ping glasses HUD** on the phone → glass HUD shows `ping #n` (phone→glasses only).
+4. Logcat shows `ptt_start received (#n)` (phone) and `from phone: cmd=reply …` (glasses).
+
+If the pong never reaches the HUD, the **custom-command name routing** is the thing to
+adjust (`GLASS_TO_PHONE_KEY` / `PHONE_TO_GLASS_KEY` in `Protocol.kt` + `Config.kt`) —
+that's the one interop detail the samples left fuzzy. Once this works, set
+`DEBUG_ECHO = false` for the real voice flow.
+
 ## Prerequisites
 
 1. **Rokid AI app** (`com.rokid.sprite.aiapp`) / **Hi Rokid** paired with the glasses
