@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">HA Voice (Glass)</string>
     <string name="hud_boot">Connecting…</string>
+    <string name="hud_running">Running — two-finger tap to talk (works in background)</string>
+    <string name="hud_need_overlay">Grant \"Draw over other apps\" to enable the background HUD</string>
 </resources>

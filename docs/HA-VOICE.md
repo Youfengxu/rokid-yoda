@@ -140,6 +140,20 @@ that's the one interop detail the samples left fuzzy. Once this works, set
 - Streaming/partial HUD updates as the reply generates.
 - On‑glasses replies with richer layout, or a "cancel" gesture mid‑capture.
 
+## Background operation
+
+The on‑glasses app runs a **foreground service** (`GlassBridgeService`) that owns the CXR
+bridge + two‑finger‑tap receiver and draws the HUD as a **system overlay** — so it keeps
+responding when it isn't the foreground app. This needs the **"draw over other apps"**
+permission (MainActivity prompts for it once).
+
+⚠️ Open question from first hardware test: the channel worked only while the glasses app
+was foreground. The foreground service is the fix for our side. If a two‑finger tap **still**
+only registers while the app is visible after this, YodaOS is delivering the gesture
+broadcast only to the focused app — in which case the globally‑available trigger is the
+glasses' **native wake** (`onGlassAiInterrupt`, which reaches the phone via the CXR‑L link
+regardless of foreground app). That becomes plan B for the trigger.
+
 ## Needs on‑device iteration (can't verify without hardware)
 
 - The exact CXR‑L↔CXR‑S custom‑command name routing (mirrored from the samples).
