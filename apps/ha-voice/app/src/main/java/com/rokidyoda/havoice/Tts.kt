@@ -18,7 +18,9 @@ class Tts(context: Context) {
     private val tag = "Tts"
     private var ready = false
 
-    private val tts = TextToSpeech(context.applicationContext) { status ->
+    // Explicit type: the onInit lambda references `tts`, which would otherwise make
+    // type inference recursive.
+    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
         if (status == TextToSpeech.SUCCESS) {
             val preferred = Locale.getDefault()
             val available = tts.isLanguageAvailable(preferred) >= TextToSpeech.LANG_AVAILABLE
