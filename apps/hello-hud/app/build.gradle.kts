@@ -43,5 +43,5 @@ dependencies {
     // Verified coordinate from Rokid's official sample (needs the maven.rokid.com repo
     // in settings.gradle.kts). Uncomment to use CXRServiceBridge / Caps.
     // implementation("com.rokid.cxr:cxr-service-bridge:1.0-20250519.061355-45")
-    // See ../../docs/SDK-REFERENCE.md and ../../vendor-sdk/CXRSSDKSamples for usage.
+    // See ../../docs/SDK-REFERENCE.md and Rokid's CXR SDK samples, CXRSSDKSamples for usage.
 }

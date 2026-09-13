@@ -42,7 +42,7 @@ community reverse-engineered docs; see [SDK-REFERENCE.md](docs/SDK-REFERENCE.md)
 1. **On-glasses app — CXR-S / "bare-metal"** — an APK that runs *on the glasses*.
    Draws the HUD; uses the camera/mic/IMU/buttons; can message a phone over the
    CXR bridge. → **Start here.** `apps/hello-hud` is this model, and Rokid's own
-   sample is in [`vendor-sdk/CXRSSDKSamples`](vendor-sdk/CXRSSDKSamples). Simplest
+   sample is in [`Rokid's CXR SDK samples, CXRSSDKSamples`](Rokid's CXR SDK samples, CXRSSDKSamples). Simplest
    path to pixels on the glasses.
 
 2. **Phone app — CXR-L** (public) — runs on the phone and works *through the Rokid
@@ -108,14 +108,14 @@ rokid-yoda/
 │   ├── hello-hud/            ← buildable on-glasses starter app (Kotlin + Gradle)
 │   ├── ha-voice/            ← PHONE app: voice-control Home Assistant via your orchestrator
 │   └── havoice-glass/      ← on-GLASSES companion: two-finger-tap trigger + HUD for ha-voice
-├── vendor-sdk/
+├── Rokid's CXR SDK samples, 
 │   ├── CXRSSDKSamples/       ← Rokid's OFFICIAL on-glasses (CXR-S) sample project
 │   └── CXRLSample/          ← Rokid's OFFICIAL phone (CXR-L) sample project
 └── scripts/
     └── deploy.sh             ← build + install + launch helper
 ```
 
-> `vendor-sdk/` holds official Rokid materials pulled from the logged-in developer
+> `Rokid's CXR SDK samples, ` holds official Rokid materials pulled from the logged-in developer
 > portal on 2026-07-08 — kept for local reference, not for redistribution.
 
 ---
@@ -158,7 +158,7 @@ The `DEBUG_ECHO` smoke test needs neither the model nor the orchestrator.
 
 - **The SDK + docs live behind a login** at [open.rokid.com](https://open.rokid.com)
   (Development Tools → SDK). The on-glasses **CXR-S sample is a public download**
-  (already pulled into `vendor-sdk/`); **CXR-L** docs are login-gated; **CXR-M** is
+  (already pulled into `Rokid's CXR SDK samples, `); **CXR-L** docs are login-gated; **CXR-M** is
   request-only via `Glasses.BD@rokid.com`. The API in
   [docs/SDK-REFERENCE.md](docs/SDK-REFERENCE.md) is verified against the official
   sample. The community [buildwithfenna/rokid-docs](https://github.com/buildwithfenna/rokid-docs)
@@ -174,3 +174,9 @@ The `DEBUG_ECHO` smoke test needs neither the model nor the orchestrator.
 ## Sources
 
 Full annotated source list is in [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## A note on the SDK
+
+Rokid's CXR SDK samples are **not** included in this repository. They are Rokid's, distributed under Rokid's own
+terms, and this repo has no licence to redistribute them. Where the docs and code comments reference the official
+samples, obtain them from Rokid directly.

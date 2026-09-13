@@ -11,7 +11,7 @@ import android.content.IntentFilter
  * YodaOS-Sprite delivers input as ORDERED broadcasts. Register this receiver with a
  * high priority and call [BroadcastReceiver.abortBroadcast] to consume an event so the
  * system default doesn't also fire. Action strings are verbatim from Rokid's official
- * CXR-S sample (see vendor-sdk/CXRSSDKSamples).
+ * CXR-S sample (see Rokid's CXR SDK samples, CXRSSDKSamples).
  *
  * Some gestures are reserved by the OS and cannot be intercepted: long-press touchpad
  * (opens Rokid AI app), double-tap button (Back), top-button tap (photo) / long-press

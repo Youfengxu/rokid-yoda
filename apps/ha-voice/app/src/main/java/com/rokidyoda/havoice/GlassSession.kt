@@ -23,7 +23,7 @@ import java.io.FileOutputStream
  * Flow: [connect] (after auth token) → link ready → install/start the glass app →
  * glass app sends "ptt_start" (two-finger tap) → [onPtt] → phone captures audio →
  * [sendReply]/[sendStatus] push text back to the glass HUD. API mirrors Rokid's official
- * CXR-L sample (vendor-sdk/CXRLSample). See docs/HA-VOICE.md.
+ * CXR-L sample (Rokid's CXR SDK samples, CXRLSample). See docs/HA-VOICE.md.
  */
 class GlassSession(
     private val onEvent: (String) -> Unit,

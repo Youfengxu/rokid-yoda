@@ -61,7 +61,7 @@ Mobile Phone (Android 9+)          Rokid Glasses (YodaOS)
 >   Deeper toolkit: stable link, real-time A/V, scene customization; pairs with CXR-S.
 > - **CXR-S / "bare-metal"** — *on-glasses* APK. Runs directly on the glasses;
 >   HUD, buttons, IMU, camera. Entry point `CXRServiceBridge` (+ `Caps`). Official
->   sample downloaded to [`../vendor-sdk/CXRSSDKSamples`](../vendor-sdk/CXRSSDKSamples).
+>   sample downloaded to [`../Rokid's CXR SDK samples, CXRSSDKSamples`](../Rokid's CXR SDK samples, CXRSSDKSamples).
 >
 > The class names the community found (`CXRServiceBridge`, `Caps`,
 > `cxr-service-bridge`) are correct. Full verified API + Maven coords:

@@ -43,6 +43,6 @@ The package **must** stay `com.rokidyoda.havoiceglass` (matches the phone's
 Full design: [../../docs/HA-VOICE.md](../../docs/HA-VOICE.md). SDK reference:
 [../../docs/SDK-REFERENCE.md](../../docs/SDK-REFERENCE.md).
 
-> Written against the verified CXR‑S API (`vendor-sdk/CXRSSDKSamples`) but not compiled
+> Written against the verified CXR‑S API (`Rokid's CXR SDK samples, CXRSSDKSamples`) but not compiled
 > here (no JDK in this environment). The Gradle wrapper jar may need generating with
 > `gradle wrapper --gradle-version 8.13` or Android Studio.

@@ -38,6 +38,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Rokid on-glasses bridge — talks to the phone (CXR-L) over the CXR link.
-    // Verified coordinate from the official CXR-S sample (vendor-sdk/CXRSSDKSamples).
+    // Verified coordinate from the official CXR-S sample (Rokid's CXR SDK samples, CXRSSDKSamples).
     implementation("com.rokid.cxr:cxr-service-bridge:1.0-20250519.061355-45")
 }

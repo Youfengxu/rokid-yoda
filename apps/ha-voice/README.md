@@ -103,7 +103,7 @@ Glasses‑mic capture via CXR‑L PCM stream · on‑device wake phrase · TTS r
 CustomApp mode for on‑glasses button triggers.
 
 > The CXR‑L API here is grounded in Rokid's official v1.0.4 sample at
-> [`../../vendor-sdk/CXRLSample`](../../vendor-sdk/CXRLSample). No Gradle/JDK is
+> [`Rokid's CXR SDK samples, CXRLSample`](Rokid's CXR SDK samples, CXRLSample). No Gradle/JDK is
 > installed in this scratch environment, so the app is written against the verified
 > SDK API but not compiled here — build it in Android Studio or with the bundled
 > `./gradlew`.

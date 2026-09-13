@@ -2,7 +2,7 @@
 
 Verified against the **official Rokid developer portal** (open.rokid.com, logged
 in) on 2026-07-08, and cross-checked against the official on-glasses sample project
-in [`../vendor-sdk/CXRSSDKSamples/`](../vendor-sdk/CXRSSDKSamples). Where the
+in [`../Rokid's CXR SDK samples, CXRSSDKSamples/`](../Rokid's CXR SDK samples, CXRSSDKSamples). Where the
 community reverse-engineered docs disagreed, the portal wins — see
 [the taxonomy note](#official-taxonomy-vs-community-naming).
 
